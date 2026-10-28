@@ -1,0 +1,168 @@
+{% from "components/badges.html" import task_status_badge %}
+
+<div id="subtasks-section" {% if is_oob %}hx-swap-oob="outerHTML"{% endif %} class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+  {% set total_sub = subtasks|length %}
+  {% set done_sub = subtasks|selectattr('is_completed')|list|length %}
+
+  <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+    <div>
+      <h2 class="text-base font-bold text-slate-900">Checklist Subtask Tim</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Seluruh anggota tim dapat menambah, mencatat ringkasan hasil, dan melampirkan berkas bukti pada subtask.</p>
+    </div>
+    <span class="text-xs font-semibold px-2.5 py-1 rounded-lg {% if done_sub == total_sub and total_sub > 0 %}bg-emerald-50 text-emerald-700 border border-emerald-200{% else %}bg-slate-100 text-slate-600{% endif %}">
+      {{ done_sub }} / {{ total_sub }} Selesai
+    </span>
+  </div>
+
+  <!-- Progress Bar -->
+  {% if total_sub > 0 %}
+  {% set pct = (done_sub / total_sub * 100)|round|int %}
+  <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+    <div class="bg-brand-600 h-2 rounded-full transition-all duration-300" {{ ('style="width: ' ~ pct ~ '%;"')|safe }}></div>
+  </div>
+  {% endif %}
+
+  <!-- Daftar Subtask -->
+  <div class="space-y-3 pt-1">
+    {% if subtasks %}
+      {% for st in subtasks %}
+      <div class="p-3.5 rounded-xl border transition-all space-y-2.5 {% if st.is_completed %}bg-slate-50/70 border-slate-200 text-slate-400{% else %}bg-white border-slate-200 text-slate-800 hover:border-brand-200{% endif %}">
+        
+        <!-- Baris Judul & Checkbox Centang -->
+        <div class="flex items-center justify-between gap-3">
+          <form hx-post="{{ url_for('tasks.toggle_subtask', task_id=task.id, subtask_id=st.id) }}"
+                hx-include="#subtask-summary-{{ st.id }}"
+                hx-target="#subtasks-section"
+                hx-swap="outerHTML"
+                method="POST"
+                class="flex items-center gap-3 flex-1 cursor-pointer">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="w-5 h-5 rounded-md flex items-center justify-center transition-colors shrink-0 {% if st.is_completed %}bg-emerald-500 text-white{% else %}border border-slate-300 hover:border-brand-500{% endif %}" title="Klik untuk mengubah status subtask">
+              {% if st.is_completed %}
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+              </svg>
+              {% endif %}
+            </button>
+            <span class="text-xs sm:text-sm font-semibold {% if st.is_completed %}line-through text-slate-400{% endif %}">
+              {{ st.title }}
+            </span>
+          </form>
+
+          {% if st.creator %}
+          <span class="text-[10px] text-slate-400 shrink-0">oleh {{ st.creator.name }}</span>
+          {% endif %}
+        </div>
+
+        <!-- Kolom Catatan / Ringkasan Subtask (Editable jika belum selesai, Greyed Out jika selesai) -->
+        <div class="pl-8">
+          <textarea
+            id="subtask-summary-{{ st.id }}"
+            name="summary"
+            rows="2"
+            placeholder="Tambahkan catatan/ringkasan hasil pekerjaan subtask..."
+            hx-post="{{ url_for('tasks.update_subtask_summary', task_id=task.id, subtask_id=st.id) }}"
+            hx-trigger="change, blur"
+            hx-target="#subtasks-section"
+            hx-swap="outerHTML"
+            class="w-full text-xs p-2.5 rounded-xl border transition-all resize-none {% if st.is_completed %}bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed select-none{% else %}bg-white text-slate-800 border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none{% endif %}"
+            {% if st.is_completed %}disabled readonly{% endif %}>{{ st.summary or '' }}</textarea>
+        </div>
+
+        <!-- Lampiran Berkas Subtask -->
+        <div class="pl-8 pt-1 flex flex-wrap items-center gap-2">
+          <!-- Daftar Berkas Terlampir pada Subtask -->
+          {% for att in st.attachments %}
+          <div class="inline-flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-lg border text-xs {% if st.is_completed %}bg-slate-100 border-slate-200 text-slate-500{% else %}bg-indigo-50/70 border-indigo-200 text-indigo-900{% endif %}">
+            {% if att.is_image %}
+            <div class="w-5 h-5 rounded overflow-hidden shrink-0 cursor-pointer"
+                 data-url="{{ url_for('tasks.view_attachment', task_id=task.id, attachment_id=att.id) }}"
+                 data-caption="{{ att.original_name }}"
+                 onclick="openImageLightbox(this.dataset.url, this.dataset.caption)"
+                 title="Klik untuk melihat foto">
+              <img src="{{ url_for('tasks.view_attachment', task_id=task.id, attachment_id=att.id) }}" class="w-full h-full object-cover">
+            </div>
+            {% else %}
+            <svg class="w-3.5 h-3.5 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            {% endif %}
+            <a href="{{ url_for('tasks.download_attachment', task_id=task.id, attachment_id=att.id) }}" class="hover:underline font-medium truncate max-w-[140px]" title="{{ att.original_name }}">
+              {{ att.original_name }}
+            </a>
+            <span class="text-[10px] text-slate-400">({{ att.file_size_formatted }})</span>
+
+            {% if not st.is_completed %}
+            <!-- Tombol Hapus Berkas Subtask -->
+            <form action="{{ url_for('tasks.delete_attachment', task_id=task.id, attachment_id=att.id, from_subtask=1) }}"
+                  method="POST"
+                  hx-post="{{ url_for('tasks.delete_attachment', task_id=task.id, attachment_id=att.id, from_subtask=1) }}"
+                  hx-target="#subtasks-section"
+                  hx-swap="outerHTML"
+                  class="inline ml-0.5">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="text-slate-400 hover:text-red-600 transition-colors" title="Hapus berkas ini">&times;</button>
+            </form>
+            {% endif %}
+          </div>
+          {% endfor %}
+
+          <!-- Tombol Unggah Lampiran Subtask (Hanya aktif jika belum selesai) -->
+          {% if not st.is_completed %}
+          <form action="{{ url_for('tasks.upload_subtask_attachment', task_id=task.id, subtask_id=st.id) }}"
+                method="POST"
+                enctype="multipart/form-data"
+                hx-post="{{ url_for('tasks.upload_subtask_attachment', task_id=task.id, subtask_id=st.id) }}"
+                hx-encoding="multipart/form-data"
+                hx-target="#subtasks-section"
+                hx-swap="outerHTML"
+                class="inline-flex items-center">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:text-brand-700 bg-slate-100 hover:bg-brand-50 border border-slate-200 rounded-lg transition-colors">
+              <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+              </svg>
+              <span>+ Berkas/Foto</span>
+              <input type="file" name="files" multiple onchange="this.form.requestSubmit()" class="hidden">
+            </label>
+          </form>
+          {% endif %}
+        </div>
+
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="py-4 text-center text-xs text-slate-400 italic bg-slate-50 rounded-xl border border-dashed border-slate-200">
+        Belum ada subtask yang ditambahkan oleh anggota tim.
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Formulir Cepat Tambah Subtask -->
+  <form action="{{ url_for('tasks.add_subtask', task_id=task.id) }}"
+        hx-post="{{ url_for('tasks.add_subtask', task_id=task.id) }}"
+        hx-target="#subtasks-section"
+        hx-swap="outerHTML"
+        method="POST"
+        class="pt-3 border-t border-slate-100 flex gap-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="text" name="title" required placeholder="Tambah subtask tahapan baru..."
+      class="flex-1 px-3.5 py-2 text-xs sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+    <button type="submit"
+      class="px-4 py-2 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-colors shrink-0">
+      + Tambah Subtask
+    </button>
+  </form>
+
+  <!-- Out-of-band swap for Task Status Badge in Header -->
+  <span id="task-status-badge" hx-swap-oob="innerHTML">
+    {{ task_status_badge(task.status) }}
+  </span>
+
+  <!-- Out-of-band swap for Attachments Section if triggered from subtask attachment upload/deletion -->
+  {% if oob_attachments %}
+    {% with is_oob=True %}
+      {% include "tasks/_attachments_section.html" %}
+    {% endwith %}
+  {% endif %}
+</div>

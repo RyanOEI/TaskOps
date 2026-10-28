@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+{% from "components/badges.html" import task_status_badge, item_status_badge %}
+
+{% block title %}Antrean Review Tugas - TaskOps{% endblock %}
+{% block header_title %}Antrean Review{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header Halaman -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900">Antrean Evaluasi Tugas</h1>
+      <p class="text-sm text-slate-500 mt-0.5">Tinjau kelayakan hasil pekerjaan yang telah diajukan selesai oleh staf sebelum disetujui penuh</p>
+    </div>
+    <div>
+      <span class="inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold {% if tasks %}bg-purple-50 text-purple-700 border border-purple-200{% else %}bg-slate-100 text-slate-500{% endif %}">
+        {{ tasks|length }} Menunggu Evaluasi
+      </span>
+    </div>
+  </div>
+
+  <!-- Bilah Pencarian Real-Time -->
+  {% if tasks %}
+  <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between">
+    <div class="relative flex-1 max-w-md">
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+      </div>
+      <input type="text" id="review-search-input" onkeyup="filterReviewList()"
+        placeholder="Cari tugas, pelaksana, divisi..."
+        class="w-full pl-9 pr-3 py-2 text-xs sm:text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors">
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Daftar Kartu Evaluasi Review -->
+  {% if tasks %}
+  <div class="space-y-6" id="review-container">
+    {% for task in tasks %}
+    {% set search_data = (task.title|lower) ~ ' ' ~ ((task.description or '')|lower) %}
+    {% if task.assigned_user %}
+      {% set search_data = search_data ~ ' ' ~ (task.assigned_user.name|lower) ~ ' @' ~ (task.assigned_user.username|lower) %}
+    {% elif task.assigned_team %}
+      {% set search_data = search_data ~ ' ' ~ (task.assigned_team.name|lower) %}
+    {% endif %}
+
+    <div class="review-card bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
+         data-search="{{ search_data }}">
+
+      <!-- Bagian Atas: Info Tugas & Status -->
+      <div class="p-5 sm:p-6 border-b border-slate-100 space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2.5 flex-wrap">
+              <h2 class="text-lg font-bold text-slate-900">
+                <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
+                   hx-get="{{ url_for('tasks.detail', task_id=task.id) }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+                   class="hover:text-brand-600 transition-colors">
+                  {{ task.title }}
+                </a>
+              </h2>
+              {{ task_status_badge(task.status) }}
+            </div>
+
+            {% if task.description %}
+            <p class="text-xs text-slate-600 line-clamp-2 pt-0.5">{{ task.description }}</p>
+            {% endif %}
+          </div>
+
+          <!-- Tenggat Waktu -->
+          {% if task.due_date %}
+          <span class="inline-flex items-center text-xs font-medium text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 shrink-0">
+            <svg class="w-3.5 h-3.5 mr-1 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            Tenggat: {{ task.due_date.strftime('%d %b %Y') }}
+          </span>
+          {% endif %}
+        </div>
+
+        <!-- Metadata Pelaksana -->
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 pt-1">
+          <span>
+            <strong>Pelaksana:</strong>
+            {% if task.assigned_user %}
+              {{ task.assigned_user.name }} (@{{ task.assigned_user.username }})
+            {% elif task.assigned_team %}
+              Tim {{ task.assigned_team.name }}
+            {% else %}
+              -
+            {% endif %}
+          </span>
+          <span>&bull;</span>
+          <span>Dibuat: {{ task.created_at.strftime('%d/%m/%Y') }}</span>
+        </div>
+
+        {% if task.completion_remarks %}
+        <div class="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900">
+          <span class="font-bold">Catatan Penyelesaian Staf:</span> {{ task.completion_remarks }}
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Bagian Tengah: Checklist Subtask & Ringkasan Material -->
+      <div class="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/40">
+
+        <!-- Kolom 1: Subtasks -->
+        <div class="space-y-3">
+          {% set total_sub = task.subtasks|length %}
+          {% set done_sub = task.subtasks|selectattr('is_completed')|list|length %}
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">Pemeriksaan Subtask</h4>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded-lg {% if done_sub == total_sub and total_sub > 0 %}bg-emerald-50 text-emerald-700{% else %}bg-slate-100 text-slate-600{% endif %}">
+              {{ done_sub }} / {{ total_sub }} Selesai
+            </span>
+          </div>
+
+          <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+            {% if task.subtasks %}
+              {% for st in task.subtasks %}
+              <div class="flex items-center gap-2 p-2 rounded-lg bg-white border border-slate-200 text-xs">
+                {% if st.is_completed %}
+                <span class="w-4 h-4 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                </span>
+                <span class="text-slate-700 font-medium line-through text-slate-400">{{ st.title }}</span>
+                {% else %}
+                <span class="w-4 h-4 rounded-full border border-slate-300 shrink-0"></span>
+                <span class="text-slate-700 font-medium">{{ st.title }}</span>
+                {% endif %}
+              </div>
+              {% endfor %}
+            {% else %}
+              <p class="text-xs text-slate-400 italic py-2">Tugas ini tidak memiliki subtask terdaftar.</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Kolom 2: Material Terkait & Peringatan Visual -->
+        <div class="space-y-3">
+          {% set unreceived = task.item_requests|rejectattr('status', 'equalto', ItemStatus.RECEIVED)|list %}
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">Kebutuhan Material</h4>
+            <span class="text-xs font-medium text-slate-500">{{ task.item_requests|length }} Barang</span>
+          </div>
+
+          {% if unreceived %}
+          <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800 flex items-center gap-2">
+            <svg class="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span>Terdapat <strong>{{ unreceived|length }} material</strong> yang belum berstatus Diterima di lapangan.</span>
+          </div>
+          {% endif %}
+
+          <div class="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+            {% if task.item_requests %}
+              {% for it in task.item_requests %}
+              <div class="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 text-xs">
+                <span class="font-medium text-slate-800">{{ it.item_name }} ({{ it.quantity }})</span>
+                <div>{{ item_status_badge(it.status) }}</div>
+              </div>
+              {% endfor %}
+            {% else %}
+              <p class="text-xs text-slate-400 italic py-2">Tidak ada material yang diajukan untuk tugas ini.</p>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Bagian Bawah: Tombol Aksi Evaluasi Administrator -->
+      <div class="p-4 sm:p-5 bg-white border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+        <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
+          class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors">
+          Buka Halaman Detail &rarr;
+        </a>
+
+        <div class="flex items-center gap-2.5">
+          <!-- Tombol Minta Perbaikan (Needs Continuation) -->
+          <button type="button"
+            data-id="{{ task.id }}"
+            data-title="{{ task.title }}"
+            onclick="openRequestContinuationModal(this.dataset.id, this.dataset.title)"
+            class="px-4 py-2 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl transition-all shadow-sm">
+            <svg class="w-3.5 h-3.5 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+            Minta Perbaikan / Lanjutkan
+          </button>
+
+          <!-- Tombol Setujui Selesai (Approve) -->
+          <form action="{{ url_for('admin.review_approve', task_id=task.id) }}"
+                hx-post="{{ url_for('admin.review_approve', task_id=task.id) }}"
+                hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML"
+                method="POST" hx-confirm="Apakah Anda yakin ingin menyetujui tugas ini dan menyatakannya Selesai sepenuhnya?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit"
+              class="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-sm active:scale-[0.99]">
+              <svg class="w-3.5 h-3.5 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              Setujui Selesai (Approve)
+            </button>
+          </form>
+        </div>
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
+    <svg class="w-12 h-12 mx-auto mb-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+    </svg>
+    <p class="text-sm font-medium text-slate-700">Antrean evaluasi bersih!</p>
+    <p class="text-xs text-slate-400 mt-1">Tidak ada tugas yang sedang menunggu peninjauan atau evaluasi Administrator saat ini.</p>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: MINTA PERBAIKAN / LANJUTKAN (DENGAN REVIEW NOTES WAJIB) -->
+<!-- ========================================================================= -->
+<div id="modal-request-continuation" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex items-center gap-3 pb-3 border-b border-slate-100">
+      <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-slate-900">Minta Perbaikan / Lanjutkan Tugas</h3>
+        <p class="text-xs text-slate-500 mt-0.5" id="modal-continuation-title">Tugas: ...</p>
+      </div>
+    </div>
+
+    <form id="form-continuation" method="POST" class="mt-4 space-y-4"
+          hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML"
+          onsubmit="closeModal('modal-request-continuation')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label for="review_notes" class="block text-xs font-semibold text-slate-700 uppercase mb-1">
+          Catatan Evaluasi / Hal yang Perlu Diperbaiki <span class="text-red-500">*</span>
+        </label>
+        <textarea id="review_notes" name="review_notes" rows="4" required minlength="3"
+          placeholder="Tuliskan catatan teknis apa saja yang belum sesuai standar, kekurangan pekerjaan, atau instruksi perbaikan..."
+          class="block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none"></textarea>
+        <p class="text-[11px] text-slate-400 mt-1">Status tugas akan dikembalikan ke 'Sedang Dikerjakan' dan catatan ini akan muncul di halaman tugas pelaksana.</p>
+      </div>
+
+      <div class="pt-3 flex justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-request-continuation')"
+          class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+          Batal
+        </button>
+        <button type="submit"
+          class="px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-sm transition-colors">
+          Kirim Catatan & Kembalikan Tugas
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  window.openRequestContinuationModal = function(taskId, taskTitle) {
+    const url = '/admin/review-queue/' + taskId + '/request-continuation';
+    const form = document.getElementById('form-continuation');
+    form.action = url;
+    form.setAttribute('hx-post', url);
+    if (window.htmx) htmx.process(form);
+    document.getElementById('modal-continuation-title').textContent = 'Tugas: ' + taskTitle;
+    document.getElementById('review_notes').value = '';
+    openModal('modal-request-continuation');
+  };
+
+  window.filterReviewList = function() {
+    const q = document.getElementById('review-search-input').value.toLowerCase().trim();
+    const cards = document.querySelectorAll('.review-card');
+    cards.forEach(c => {
+      const data = c.getAttribute('data-search') || '';
+      if (!q || data.includes(q)) {
+        c.style.display = '';
+      } else {
+        c.style.display = 'none';
+      }
+    });
+  };
+</script>
+{% endblock %}
+

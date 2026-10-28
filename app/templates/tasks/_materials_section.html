@@ -1,0 +1,146 @@
+{% from "components/badges.html" import item_status_badge %}
+
+<div id="materials-section" class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
+  <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+    <div>
+      <h2 class="text-base font-bold text-slate-900">Kebutuhan Material & Logistik</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Daftar bahan dan suku cadang yang diajukan untuk pekerjaan ini.</p>
+    </div>
+    <span class="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+      {{ item_requests|length }} Barang
+    </span>
+  </div>
+
+  <!-- Tabel Daftar Material yang Telah Diajukan -->
+  {% if item_requests %}
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-slate-100 text-left text-xs sm:text-sm">
+      <thead class="bg-slate-50 text-slate-500 uppercase text-[11px] font-semibold">
+        <tr>
+          <th class="py-2.5 px-3">Nama Material</th>
+          <th class="py-2.5 px-3">Jumlah</th>
+          <th class="py-2.5 px-3">Status</th>
+          <th class="py-2.5 px-3">Catatan / Alasan</th>
+          <th class="py-2.5 px-3 text-right">Aksi</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for it in item_requests %}
+        <tr class="hover:bg-slate-50/50">
+          <td class="py-3 px-3 font-semibold text-slate-800">{{ it.item_name }}</td>
+          <td class="py-3 px-3 text-slate-600">{{ it.quantity }}</td>
+          <td class="py-3 px-3 whitespace-nowrap">
+            {{ item_status_badge(it.status) }}
+          </td>
+          <td class="py-3 px-3 text-xs text-slate-500 max-w-xs">
+            {% if it.status.value == 'REJECTED' and it.rejection_reason %}
+            <span class="text-red-600 font-medium">Alasan Ditolak: {{ it.rejection_reason }}</span>
+            {% else %}
+            <span>{{ it.notes or '-' }}</span>
+            {% endif %}
+          </td>
+          <td class="py-3 px-3 text-right whitespace-nowrap">
+            {% if it.status.value == 'SHIPPED' %}
+            <form action="{{ url_for('tasks.receive_item', task_id=task.id, item_id=it.id) }}"
+                  hx-post="{{ url_for('tasks.receive_item', task_id=task.id, item_id=it.id) }}"
+                  hx-target="#materials-section"
+                  hx-swap="outerHTML"
+                  method="POST" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit"
+                class="px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors">
+                Tandai Diterima
+              </button>
+            </form>
+            {% elif it.status.value == 'REQUESTED' %}
+            <form action="{{ url_for('tasks.cancel_item', task_id=task.id, item_id=it.id) }}"
+                  hx-post="{{ url_for('tasks.cancel_item', task_id=task.id, item_id=it.id) }}"
+                  hx-target="#materials-section"
+                  hx-swap="outerHTML"
+                  method="POST" class="inline"
+                  hx-confirm="Batalkan permintaan material ini?">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit"
+                class="px-2.5 py-1 text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-slate-200">
+                Batalkan
+              </button>
+            </form>
+            {% elif it.status.value == 'RECEIVED' and it.received_at %}
+            <span class="text-[11px] text-emerald-600 font-medium">
+              Diterima: {{ it.received_at.strftime('%d/%m %H:%M') }}
+            </span>
+            {% else %}
+            <span class="text-xs text-slate-400">-</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="py-6 text-center text-xs text-slate-400 italic bg-slate-50 rounded-xl border border-dashed border-slate-200">
+    Belum ada material yang diajukan untuk tugas ini.
+  </div>
+  {% endif %}
+
+  <!-- Formulir Pengajuan Multi-Item Dinamis -->
+  <div class="pt-5 border-t border-slate-100">
+    <div class="mb-4">
+      <h3 class="text-sm font-bold text-slate-900">Ajukan Kebutuhan Material Baru</h3>
+      <p class="text-xs text-slate-500 mt-0.5">Tambah baris untuk mengajukan beberapa bahan sekaligus tanpa reload.</p>
+    </div>
+
+    <form action="{{ url_for('tasks.request_items', task_id=task.id) }}"
+          hx-post="{{ url_for('tasks.request_items', task_id=task.id) }}"
+          hx-target="#materials-section"
+          hx-swap="outerHTML"
+          method="POST" class="space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <!-- Kontainer Baris Material Dinamis -->
+      <div id="material-rows-container" class="space-y-3">
+        <div class="material-row grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 items-start">
+          <div class="sm:col-span-5">
+            <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Nama Barang <span class="text-red-500">*</span></label>
+            <input type="text" name="item_names[]" required placeholder="contoh: Pipa PVC 2 inch"
+              class="block w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white">
+          </div>
+          <div class="sm:col-span-3">
+            <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Kuantitas <span class="text-red-500">*</span></label>
+            <input type="text" name="quantities[]" required placeholder="contoh: 4 batang"
+              class="block w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white">
+          </div>
+          <div class="sm:col-span-3">
+            <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Catatan Spesifikasi</label>
+            <input type="text" name="notes[]" placeholder="contoh: Standar AW Rucika"
+              class="block w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white">
+          </div>
+          <div class="sm:col-span-1 pt-5 flex justify-end">
+            <button type="button" onclick="removeMaterialRow(this)" disabled title="Minimal 1 baris"
+              class="btn-remove-row p-1.5 text-slate-300 rounded-lg cursor-not-allowed">
+              &times;
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tombol Tambah Baris & Kirim -->
+      <div class="pt-2 flex flex-wrap items-center justify-between gap-3">
+        <button type="button" onclick="addMaterialRow()"
+          class="inline-flex items-center px-3 py-2 text-xs font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded-xl transition-colors">
+          <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+          </svg>
+          Tambah Baris Bahan (+)
+        </button>
+
+        <button type="submit"
+          class="px-5 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-all active:scale-[0.99]">
+          Kirim Pengajuan Material
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+

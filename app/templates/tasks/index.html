@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+{% from "components/badges.html" import task_status_badge, task_priority_badge %}
+
+{% block title %}Dasbor Tugas - TaskOps{% endblock %}
+{% block header_title %}Dasbor Tugas{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header & Tombol Buat Tugas -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900">Dasbor Tugas</h1>
+      <p class="text-sm text-slate-500 mt-0.5">
+        {% if current_user.is_admin %}
+        Kelola, prioritaskan, dan pantau seluruh penugasan operasional tim
+        {% else %}
+        Pekerjaan yang ditugaskan kepada divisi tim operasional Anda
+        {% endif %}
+      </p>
+    </div>
+
+    {% if current_user.is_admin %}
+    <div>
+      <a href="{{ url_for('tasks.create') }}"
+        hx-get="{{ url_for('tasks.create') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+        class="inline-flex items-center justify-center w-full sm:w-auto px-4 py-2.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-all active:scale-[0.99]">
+        <svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+        Buat Tugas Baru
+      </a>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Kontainer Parsial Dasbor Tugas (HTMX Target untuk Filter & Tab) -->
+  <div id="tasks-view-container" class="space-y-6">
+
+  <!-- Ringkasan KPI Dasbor Operasional -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between">
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Tugas Aktif</div>
+        <div class="text-2xl font-bold text-slate-900 mt-0.5">{{ kpi.total_active }}</div>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+        </svg>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between {% if kpi.overdue > 0 %}border-red-300 bg-red-50/30{% endif %}">
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wider {% if kpi.overdue > 0 %}text-red-600 font-bold{% else %}text-slate-400{% endif %}">Terlewat (Overdue)</div>
+        <div class="text-2xl font-bold {% if kpi.overdue > 0 %}text-red-700{% else %}text-slate-900{% endif %} mt-0.5">{{ kpi.overdue }}</div>
+      </div>
+      <div class="w-10 h-10 rounded-xl {% if kpi.overdue > 0 %}bg-red-100 text-red-600 animate-pulse{% else %}bg-slate-100 text-slate-500{% endif %} flex items-center justify-center">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between">
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Menunggu Review</div>
+        <div class="text-2xl font-bold text-purple-700 mt-0.5">{{ kpi.waiting_review }}</div>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between">
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Tertunda</div>
+        <div class="text-2xl font-bold text-amber-700 mt-0.5">{{ kpi.pending }}</div>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab Filter Status, Filter Prioritas, & Bilah Pencarian Real-Time -->
+  <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3 lg:space-y-0 lg:flex lg:items-center lg:justify-between gap-4">
+    <!-- Tabs Filter Status -->
+    <div class="flex flex-wrap gap-1 p-1 bg-slate-100 rounded-xl">
+      <a href="{{ url_for('tasks.index', tab='all', priority=current_priority) }}"
+        hx-get="{{ url_for('tasks.index', tab='all', priority=current_priority) }}"
+        hx-target="#tasks-view-container" hx-select="#tasks-view-container" hx-swap="outerHTML" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'all' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+        Semua ({{ counts.all }})
+      </a>
+      <a href="{{ url_for('tasks.index', tab='TODO', priority=current_priority) }}"
+        hx-get="{{ url_for('tasks.index', tab='TODO', priority=current_priority) }}"
+        hx-target="#tasks-view-container" hx-select="#tasks-view-container" hx-swap="outerHTML" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'TODO' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+        Menunggu ({{ counts.TODO }})
+      </a>
+      <a href="{{ url_for('tasks.index', tab='IN_PROGRESS', priority=current_priority) }}"
+        hx-get="{{ url_for('tasks.index', tab='IN_PROGRESS', priority=current_priority) }}"
+        hx-target="#tasks-view-container" hx-select="#tasks-view-container" hx-swap="outerHTML" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'IN_PROGRESS' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+        Dikerjakan ({{ counts.IN_PROGRESS }})
+      </a>
+      <a href="{{ url_for('tasks.index', tab='PENDING', priority=current_priority) }}"
+        hx-get="{{ url_for('tasks.index', tab='PENDING', priority=current_priority) }}"
+        hx-target="#tasks-view-container" hx-select="#tasks-view-container" hx-swap="outerHTML" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'PENDING' %}bg-amber-100 text-amber-900 shadow-sm font-bold{% else %}text-amber-700 hover:text-amber-900{% endif %}">
+        Tertunda ({{ counts.PENDING }})
+      </a>
+      <a href="{{ url_for('tasks.index', tab='WAITING_REVIEW', priority=current_priority) }}"
+        hx-get="{{ url_for('tasks.index', tab='WAITING_REVIEW', priority=current_priority) }}"
+        hx-target="#tasks-view-container" hx-select="#tasks-view-container" hx-swap="outerHTML" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'WAITING_REVIEW' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+        Review ({{ counts.WAITING_REVIEW }})
+      </a>
+      <a href="{{ url_for('tasks.index', tab='COMPLETED', priority=current_priority) }}"
+        hx-get="{{ url_for('tasks.index', tab='COMPLETED', priority=current_priority) }}"
+        hx-target="#tasks-view-container" hx-select="#tasks-view-container" hx-swap="outerHTML" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'COMPLETED' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+        Selesai ({{ counts.COMPLETED }})
+      </a>
+    </div>
+
+    <!-- Filter Prioritas & Bilah Pencarian Real-Time -->
+    <div class="flex flex-col sm:flex-row items-center gap-2 flex-1 max-w-lg justify-end">
+      <!-- Dropdown Prioritas -->
+      <select name="priority"
+        hx-get="{{ url_for('tasks.index', tab=current_tab) }}"
+        hx-target="#tasks-view-container" hx-select="#tasks-view-container" hx-swap="outerHTML" hx-push-url="true"
+        class="w-full sm:w-auto px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500">
+        <option value="all" {% if current_priority == 'all' %}selected{% endif %}>Semua Prioritas</option>
+        <option value="URGENT" {% if current_priority == 'URGENT' %}selected{% endif %}>Genting (URGENT)</option>
+        <option value="HIGH" {% if current_priority == 'HIGH' %}selected{% endif %}>Tinggi (High)</option>
+        <option value="MEDIUM" {% if current_priority == 'MEDIUM' %}selected{% endif %}>Sedang (Medium)</option>
+        <option value="LOW" {% if current_priority == 'LOW' %}selected{% endif %}>Rendah (Low)</option>
+      </select>
+
+      <!-- Bilah Pencarian Real-Time -->
+      <div class="relative w-full sm:w-64">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+        </div>
+        <input type="text" id="task-search-input" onkeyup="filterTaskList()"
+          placeholder="Cari judul, tim, kendala..."
+          class="w-full pl-9 pr-3 py-2 text-xs sm:text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors">
+      </div>
+    </div>
+  </div>
+
+  <!-- Grid Kartu Tugas -->
+  {% if tasks %}
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="tasks-grid">
+    {% for task in tasks %}
+    {% set search_data = (task.title|lower) ~ ' ' ~ ((task.description or '')|lower) ~ ' ' ~ ((task.pending_reason or '')|lower) ~ ' ' ~ (task.priority.value|lower) %}
+    {% if task.assigned_user %}
+      {% set search_data = search_data ~ ' ' ~ (task.assigned_user.name|lower) ~ ' @' ~ (task.assigned_user.username|lower) %}
+    {% elif task.assigned_team %}
+      {% set search_data = search_data ~ ' ' ~ (task.assigned_team.name|lower) %}
+    {% endif %}
+
+    <div class="task-card bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between {% if task.is_overdue %}border-red-300 ring-1 ring-red-200{% elif task.priority.value == 'URGENT' %}border-red-200 ring-1 ring-red-100{% endif %}"
+         data-search="{{ search_data }}">
+
+      <div class="space-y-3">
+        <!-- Prioritas & Status -->
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            {{ task_status_badge(task.status) }}
+            {{ task_priority_badge(task.priority) }}
+          </div>
+
+          <!-- Indikator Tenggat & Overdue -->
+          {% if task.is_overdue %}
+          <span class="inline-flex items-center text-[11px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-lg border border-red-300 animate-pulse">
+            <svg class="w-3.5 h-3.5 mr-1 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            Terlewat: {{ task.due_date.strftime('%d %b %Y') }}
+          </span>
+          {% elif task.due_date %}
+          <span class="inline-flex items-center text-[11px] font-medium text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+            <svg class="w-3.5 h-3.5 mr-1 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            {{ task.due_date.strftime('%d %b %Y') }}
+          </span>
+          {% endif %}
+        </div>
+
+        <!-- Judul & Deskripsi Tugas -->
+        <div>
+          <h3 class="text-base font-bold text-slate-900 line-clamp-2">
+            <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
+               hx-get="{{ url_for('tasks.detail', task_id=task.id) }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+               class="hover:text-brand-600 transition-colors">
+              {{ task.title }}
+            </a>
+          </h3>
+          {% if task.description %}
+          <p class="text-xs text-slate-500 mt-1 line-clamp-2">{{ task.description }}</p>
+          {% endif %}
+        </div>
+
+        <!-- Banner Amber PENDING jika Tertunda -->
+        {% if task.status == TaskStatus.PENDING and task.pending_reason %}
+        <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-0.5">
+          <div class="flex items-center font-bold text-[11px] uppercase tracking-wider text-amber-800">
+            <svg class="w-3.5 h-3.5 mr-1 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+            Kendala Penundaan:
+          </div>
+          <p class="text-xs line-clamp-2">{{ task.pending_reason }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Info Tim Penerima Tugas & Progress Subtask -->
+        <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div>
+            {% if task.assigned_team %}
+            <span class="inline-flex items-center gap-1 font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-lg border border-brand-200">
+              <svg class="w-3.5 h-3.5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0z"></path>
+              </svg>
+              Tim {{ task.assigned_team.name }}
+            </span>
+            {% elif task.assigned_user %}
+            <span class="inline-flex items-center gap-1 font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg">
+              <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+              </svg>
+              {{ task.assigned_user.name }}
+            </span>
+            {% else %}
+            <span class="text-slate-400 italic">Belum ditugaskan</span>
+            {% endif %}
+          </div>
+
+          <!-- Progress Subtask -->
+          {% set total_sub = task.subtasks|length %}
+          {% set done_sub = task.subtasks|selectattr('is_completed')|list|length %}
+          {% if total_sub > 0 %}
+          <span class="font-medium {% if done_sub == total_sub %}text-emerald-600 font-semibold{% else %}text-slate-500{% endif %}">
+            {{ done_sub }}/{{ total_sub }} Subtask
+          </span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Tombol Aksi Buka Detail & Edit Admin -->
+      <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+        <span class="text-[11px] text-slate-400">
+          {{ task.created_at.strftime('%d/%m/%Y') }}
+        </span>
+        <div class="flex items-center gap-2">
+          {% if current_user.is_admin %}
+          <a href="{{ url_for('tasks.edit', task_id=task.id) }}"
+            hx-get="{{ url_for('tasks.edit', task_id=task.id) }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+            class="text-xs text-slate-500 hover:text-slate-800 transition-colors" title="Edit Tugas">
+            Edit
+          </a>
+          {% endif %}
+          <a href="{{ url_for('tasks.detail', task_id=task.id) }}"
+            hx-get="{{ url_for('tasks.detail', task_id=task.id) }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+            class="inline-flex items-center text-xs font-semibold text-brand-600 hover:text-brand-800 transition-colors">
+            Buka Detail
+            <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+          </a>
+        </div>
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
+    <svg class="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+    </svg>
+    <p class="text-sm font-medium text-slate-600">Tidak ada tugas pada kategori ini</p>
+    <p class="text-xs text-slate-400 mt-1">
+      {% if current_user.is_admin %}
+      Gunakan tombol "Buat Tugas Baru" untuk menambahkan pekerjaan.
+      {% else %}
+      Belum ada tugas operasional yang dialokasikan kepada tim Anda.
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+
+  </div> <!-- Penutup #tasks-view-container -->
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  window.filterTaskList = function() {
+    const q = document.getElementById('task-search-input').value.toLowerCase().trim();
+    const cards = document.querySelectorAll('.task-card');
+    cards.forEach(c => {
+      const data = c.getAttribute('data-search') || '';
+      if (!q || data.includes(q)) {
+        c.style.display = '';
+      } else {
+        c.style.display = 'none';
+      }
+    });
+  };
+</script>
+{% endblock %}

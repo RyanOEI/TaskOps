@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+{% from "components/badges.html" import task_status_badge, task_priority_badge, item_status_badge %}
+
+{% block title %}{{ task.title }} - TaskOps{% endblock %}
+{% block header_title %}Detail Tugas{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+
+  <!-- Breadcrumb & Navigasi Atas -->
+  <div class="flex items-center justify-between gap-3 flex-wrap">
+    <a href="{{ url_for('tasks.index') }}" hx-get="{{ url_for('tasks.index') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+       class="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors">
+      <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+      </svg>
+      Kembali ke Dasbor Tugas
+    </a>
+
+    <!-- Status & Priority Badges -->
+    <div class="flex items-center gap-2">
+      <span id="task-status-badge">{{ task_status_badge(task.status) }}</span>
+      {{ task_priority_badge(task.priority) }}
+    </div>
+  </div>
+
+  <!-- Banner Peringatan: Overdue (Terlewat) -->
+  {% if task.is_overdue %}
+  <div class="bg-red-50 border border-red-300 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-3 animate-pulse">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-red-900">Peringatan: Tenggat Waktu Terlewat</h3>
+        <p class="text-xs text-red-700 mt-0.5">Tugas ini melewati tenggat waktu ({{ task.due_date.strftime('%d %B %Y') }}). Mohon prioritaskan penyelesaian.</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Banner Status: WAITING_REVIEW -->
+  {% if task.status == TaskStatus.WAITING_REVIEW %}
+  <div class="bg-purple-50 border border-purple-200 rounded-2xl p-5 shadow-sm space-y-2">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-purple-900">Menunggu Evaluasi Administrator</h3>
+        <p class="text-xs text-purple-700 mt-0.5">Pekerjaan telah diajukan selesai dan saat ini berada dalam antrean evaluasi Administrator.</p>
+      </div>
+    </div>
+    {% if task.completion_remarks %}
+    <div class="pl-12 text-xs text-purple-800 bg-purple-100/50 p-2.5 rounded-xl border border-purple-200">
+      <span class="font-bold">Catatan Penyelesaian Staf:</span> {{ task.completion_remarks }}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Banner Status: COMPLETED -->
+  {% if task.status == TaskStatus.COMPLETED %}
+  <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 shadow-sm space-y-2">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-emerald-900">Tugas Telah Selesai</h3>
+        <p class="text-xs text-emerald-700 mt-0.5">Pekerjaan ini telah dievaluasi dan disetujui penuh oleh Administrator.</p>
+      </div>
+    </div>
+    {% if task.completion_remarks %}
+    <div class="pl-12 text-xs text-emerald-800 bg-emerald-100/60 p-2.5 rounded-xl border border-emerald-200">
+      <span class="font-bold">Catatan Penyelesaian Staf:</span> {{ task.completion_remarks }}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Banner Amber: PENDING (Kendala Penundaan) -->
+  {% if task.status == TaskStatus.PENDING and task.pending_reason %}
+  <div class="bg-amber-50 border border-amber-300 rounded-2xl p-5 shadow-sm space-y-3">
+    <div class="flex items-start gap-3">
+      <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+      </div>
+      <div class="flex-1">
+        <h3 class="text-sm font-bold text-amber-900">Pekerjaan Sedang Tertunda</h3>
+        <p class="text-xs text-amber-800 mt-1 font-medium leading-relaxed">{{ task.pending_reason }}</p>
+      </div>
+    </div>
+    <div class="pt-2 border-t border-amber-200/60 flex justify-end">
+      <form action="{{ url_for('tasks.resume_task', task_id=task.id) }}"
+            hx-post="{{ url_for('tasks.resume_task', task_id=task.id) }}"
+            hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit"
+          class="inline-flex items-center px-4 py-2 text-xs font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-xl transition-all shadow-sm">
+          <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          Lanjutkan Pekerjaan (Resume)
+        </button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Banner Ungu: Review Notes (Jika Ada Catatan Review Perbaikan) -->
+  {% if task.review_notes %}
+  <div class="bg-purple-50 border border-purple-200 rounded-2xl p-5 shadow-sm">
+    <div class="flex items-start gap-3">
+      <div class="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 mt-0.5">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-purple-900">Catatan Evaluasi / Permintaan Perbaikan</h3>
+        <p class="text-xs text-purple-800 mt-1 leading-relaxed">{{ task.review_notes }}</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Kartu Utama: Info Tugas & Deskripsi -->
+  <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-7 shadow-sm space-y-5">
+    <div class="flex items-start justify-between gap-4">
+      <div class="space-y-2 flex-1">
+        <h1 class="text-xl sm:text-2xl font-bold text-slate-900">{{ task.title }}</h1>
+
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-500 pt-1">
+          <!-- Tim Penerima Tugas -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-slate-400 font-medium">Ditugaskan ke:</span>
+            {% if task.assigned_team %}
+            <span class="inline-flex items-center font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-lg border border-brand-200">
+              Tim {{ task.assigned_team.name }}
+            </span>
+            {% elif task.assigned_user %}
+            <span class="inline-flex items-center font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-lg">
+              {{ task.assigned_user.name }} (@{{ task.assigned_user.username }})
+            </span>
+            {% else %}
+            <span class="text-slate-400 italic">Belum ditentukan</span>
+            {% endif %}
+          </div>
+
+          <!-- Tenggat Waktu -->
+          {% if task.due_date %}
+          <div class="flex items-center gap-1.5">
+            <span class="text-slate-400 font-medium">Tenggat:</span>
+            <span class="font-semibold {% if task.is_overdue %}text-red-600 font-bold{% else %}text-slate-700{% endif %}">
+              {{ task.due_date.strftime('%d %B %Y') }}
+            </span>
+          </div>
+          {% endif %}
+
+          <!-- Pembuat Tugas -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-slate-400 font-medium">Dibuat oleh:</span>
+            <span class="text-slate-600">{{ task.creator.name }} ({{ task.created_at.strftime('%d/%m/%Y') }})</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tombol Aksi Tambahan (Admin Edit / Print) -->
+      <div class="flex items-center gap-2 shrink-0">
+        <a href="{{ url_for('tasks.print_work_order', task_id=task.id) }}" target="_blank"
+          class="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors" title="Cetak Surat Perintah Kerja">
+          <svg class="w-4 h-4 mr-1 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+          </svg>
+          Cetak
+        </a>
+
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('tasks.edit', task_id=task.id) }}"
+          hx-get="{{ url_for('tasks.edit', task_id=task.id) }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+          class="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+          Edit
+        </a>
+
+        <button type="button" onclick="openModal('modal-archive')"
+          class="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors border border-red-200" title="Arsipkan Tugas">
+          Arsipkan
+        </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Deskripsi Lengkap -->
+    <div class="pt-4 border-t border-slate-100">
+      <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Deskripsi & Ruang Lingkup</h4>
+      {% if task.description %}
+      <p class="text-sm text-slate-700 whitespace-pre-line leading-relaxed">{{ task.description }}</p>
+      {% else %}
+      <p class="text-xs text-slate-400 italic">Tidak ada deskripsi rinci untuk tugas ini.</p>
+      {% endif %}
+    </div>
+
+    <!-- Bilah Tombol Status Transisi Pekerjaan -->
+    <div class="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-end gap-2.5">
+      {% if task.status == TaskStatus.PENDING %}
+      <form action="{{ url_for('tasks.resume_task', task_id=task.id) }}"
+            hx-post="{{ url_for('tasks.resume_task', task_id=task.id) }}"
+            hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit"
+          class="px-4 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors">
+          Lanjutkan Tugas (Resume)
+        </button>
+      </form>
+      {% elif task.status in (TaskStatus.IN_PROGRESS, TaskStatus.TODO) %}
+      <button type="button" onclick="openModal('modal-pending')"
+        class="inline-flex items-center px-3.5 py-2 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors">
+        <svg class="w-4 h-4 mr-1 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+        Tunda Pekerjaan (Pending)
+      </button>
+
+      <button type="button" onclick="openModal('modal-review-remarks')"
+        class="inline-flex items-center px-4 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-all active:scale-[0.99]">
+        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        Ajukan Review Selesai
+      </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Seksi 1: Checklist Subtask Tim (Shared Team Checklist) -->
+  {% include "tasks/_subtasks_section.html" %}
+
+  <!-- Seksi 2: Kebutuhan Material & Logistik -->
+  {% include "tasks/_materials_section.html" %}
+
+  <!-- Seksi 3: Lampiran & Berkas Tugas -->
+  {% include "tasks/_attachments_section.html" %}
+
+  <!-- Seksi 4: Linimasa Aktivitas (Audit Trail) -->
+  <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+    <div class="border-b border-slate-100 pb-3">
+      <h2 class="text-base font-bold text-slate-900">Linimasa Riwayat Aktivitas</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Catatan jejak audit seluruh perubahan status, subtask, dan logistik tugas ini.</p>
+    </div>
+
+    {% if activities %}
+    <div class="relative pl-6 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+      {% for act in activities %}
+      <div class="relative flex items-start gap-3">
+        <span class="absolute -left-6 mt-1 w-2.5 h-2.5 rounded-full bg-brand-500 ring-4 ring-white"></span>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 flex-wrap text-xs">
+            <span class="font-bold text-slate-800">{{ act.user.name if act.user else 'Sistem' }}</span>
+            <span class="text-[10px] text-slate-400">&bull; {{ act.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+          </div>
+          {% if act.details %}
+          <p class="text-xs text-slate-600 mt-0.5">{{ act.details }}</p>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="py-4 text-center text-xs text-slate-400 italic bg-slate-50 rounded-xl border border-dashed border-slate-200">
+      Belum ada riwayat aktivitas tercatat.
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: TUNDA PEKERJAAN (PENDING DENGAN ALASAN WAJIB) -->
+<!-- ========================================================================= -->
+<div id="modal-pending" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex items-center gap-3 pb-3 border-b border-slate-100">
+      <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-slate-900">Tunda Pekerjaan (Pending)</h3>
+        <p class="text-xs text-slate-500 mt-0.5">Jelaskan kendala di lapangan yang menyebabkan pekerjaan tertunda</p>
+      </div>
+    </div>
+
+    <form action="{{ url_for('tasks.mark_pending', task_id=task.id) }}"
+          hx-post="{{ url_for('tasks.mark_pending', task_id=task.id) }}"
+          hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML"
+          method="POST" class="mt-4 space-y-4" onsubmit="closeModal('modal-pending')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label for="pending_reason" class="block text-xs font-semibold text-slate-700 uppercase mb-1">
+          Alasan Penundaan <span class="text-red-500">*</span>
+        </label>
+        <textarea id="pending_reason" name="pending_reason" rows="3" required minlength="3"
+          placeholder="contoh: Menunggu kedatangan komponen cadangan..."
+          class="block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"></textarea>
+      </div>
+
+      <div class="pt-3 flex justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-pending')"
+          class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+          Batal
+        </button>
+        <button type="submit"
+          class="px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-sm transition-colors">
+          Simpan & Tunda Tugas
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: AJUKAN REVIEW SELESAI DENGAN CATATAN OPSIONAL -->
+<!-- ========================================================================= -->
+<div id="modal-review-remarks" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex items-center gap-3 pb-3 border-b border-slate-100">
+      <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-slate-900">Ajukan Review Penyelesaian</h3>
+        <p class="text-xs text-slate-500 mt-0.5">Pekerjaan akan diserahkan kepada Administrator untuk dievaluasi</p>
+      </div>
+    </div>
+
+    <form action="{{ url_for('tasks.submit_review', task_id=task.id) }}"
+          hx-post="{{ url_for('tasks.submit_review', task_id=task.id) }}"
+          hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML"
+          method="POST" class="mt-4 space-y-4" onsubmit="closeModal('modal-review-remarks')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label for="completion_remarks" class="block text-xs font-semibold text-slate-700 uppercase mb-1">
+          Catatan Penyelesaian Tambahan (Opsional)
+        </label>
+        <textarea id="completion_remarks" name="completion_remarks" rows="3"
+          placeholder="contoh: Seluruh pengujian tekanan telah selesai dengan hasil baik..."
+          class="block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"></textarea>
+      </div>
+
+      <div class="pt-3 flex justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-review-remarks')"
+          class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+          Batal
+        </button>
+        <button type="submit"
+          class="px-4 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-all active:scale-[0.99]">
+          Kirim Pengajuan Review
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: KONFIRMASI ARSIP TUGAS (KHUSUS ADMIN) -->
+<!-- ========================================================================= -->
+{% if current_user.is_admin %}
+<div id="modal-archive" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-200">
+    <div class="text-center space-y-3">
+      <div class="w-12 h-12 rounded-full bg-red-50 text-red-600 mx-auto flex items-center justify-center">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+        </svg>
+      </div>
+      <h3 class="text-base font-bold text-slate-900">Arsipkan Tugas Ini?</h3>
+      <p class="text-xs text-slate-500">Tugas akan disembunyikan dari daftar aktif namun seluruh riwayat subtask dan logistik tetap tersimpan aman.</p>
+    </div>
+
+    <div class="mt-6 flex justify-end gap-2">
+      <button type="button" onclick="closeModal('modal-archive')"
+        class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+        Batal
+      </button>
+      <form action="{{ url_for('tasks.archive_task', task_id=task.id) }}"
+            hx-post="{{ url_for('tasks.archive_task', task_id=task.id) }}"
+            hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML" hx-push-url="{{ url_for('tasks.index') }}"
+            method="POST" onsubmit="closeModal('modal-archive')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit"
+          class="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-sm transition-colors">
+          Ya, Arsipkan
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  window.addMaterialRow = function() {
+    const container = document.getElementById('material-rows-container');
+    const newRow = document.createElement('div');
+    newRow.className = 'material-row grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 items-start';
+    newRow.innerHTML = `
+      <div class="sm:col-span-5">
+        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Nama Barang <span class="text-red-500">*</span></label>
+        <input type="text" name="item_names[]" required placeholder="contoh: Sambungan Tee 2 inch"
+          class="block w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white">
+      </div>
+      <div class="sm:col-span-3">
+        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Kuantitas <span class="text-red-500">*</span></label>
+        <input type="text" name="quantities[]" required placeholder="contoh: 2 pcs"
+          class="block w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white">
+      </div>
+      <div class="sm:col-span-3">
+        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Catatan Spesifikasi</label>
+        <input type="text" name="notes[]" placeholder="contoh: Ketebalan standar"
+          class="block w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none bg-white">
+      </div>
+      <div class="sm:col-span-1 pt-5 flex justify-end">
+        <button type="button" onclick="removeMaterialRow(this)" title="Hapus baris ini"
+          class="btn-remove-row p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors">
+          &times;
+        </button>
+      </div>
+    `;
+    container.appendChild(newRow);
+  };
+
+  window.removeMaterialRow = function(btn) {
+    const rows = document.querySelectorAll('.material-row');
+    if (rows.length > 1) {
+      const row = btn.closest('.material-row');
+      if (row) row.remove();
+    }
+  };
+</script>
+{% endblock %}

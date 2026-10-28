@@ -1,0 +1,35 @@
+# ==============================================================================
+# Docker Compose: TaskOps (PWA Edition)
+# ==============================================================================
+# Memuat konfigurasi lingkungan dari .env dan menyediakan volume persisten
+# untuk basis data SQLite dan kunci VAPID Web Push.
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taskops_web
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Di dalam container, Gunicorn harus mendengarkan di 0.0.0.0 agar dapat
+      # diakses melalui pemetaan port docker ke komputer host.
+      - GUNICORN_BIND=0.0.0.0:5000
+    ports:
+      # Format: "HOST_PORT:CONTAINER_PORT"
+      # Sesuaikan port host (kiri) jika port 5000 pada komputer Anda sudah digunakan.
+      - "5000:5000"
+    volumes:
+      # Volume persisten bernama: Menjamin database task_management.db
+      # dan file vapid_keys.json tetap bertahan saat container di-restart/rebuild.
+      - sqlite_data:/app/instance
+
+volumes:
+  sqlite_data:
+    name: taskops_sqlite_data
+

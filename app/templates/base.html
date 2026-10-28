@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="id" class="h-full bg-slate-50">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>{% block title %}TaskOps - Manajemen Operasional & Pengajuan Material{% endblock %}</title>
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="TaskOps">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/icon.svg') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon.svg') }}">
+
+  <!-- CSRF & VAPID Metadata -->
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="vapid-public-key" content="{{ config.get('VAPID_PUBLIC_KEY', '') }}">
+
+  <!-- HTMX & Tailwind CSS via CDN / Local -->
+  <script src="{{ url_for('static', filename='js/htmx.min.js') }}"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    #htmx-progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      width: 0%;
+      background: linear-gradient(90deg, #6366f1, #4f46e5);
+      z-index: 9999;
+      pointer-events: none;
+      transition: width 0.3s ease, opacity 0.3s ease;
+      opacity: 0;
+    }
+    .htmx-request #htmx-progress-bar,
+    body.htmx-request #htmx-progress-bar {
+      opacity: 1;
+      width: 85%;
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="h-full flex flex-col font-sans antialiased text-slate-800">
+
+  <!-- Top Progress Bar for HTMX Transitions -->
+  <div id="htmx-progress-bar"></div>
+
+  <!-- Offline Warning Banner -->
+  <div id="offline-indicator" class="hidden bg-amber-600 text-white text-xs font-semibold px-4 py-2 text-center shadow-md z-50 sticky top-0">
+    <span class="inline-flex items-center gap-1.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+      </svg>
+      Koneksi internet terputus. Mode offline aktif.
+    </span>
+  </div>
+
+  {% if current_user.is_authenticated %}
+  <!-- Desktop Sidebar (md:flex) -->
+  <aside class="hidden md:fixed md:inset-y-0 md:flex md:w-64 md:flex-col bg-white border-r border-slate-200 z-30">
+    <div class="flex items-center h-16 px-6 border-b border-slate-100 gap-3">
+      <a href="{{ url_for('tasks.index') }}" hx-get="{{ url_for('tasks.index') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" class="flex items-center gap-3">
+        <img src="{{ url_for('static', filename='icons/icon.svg') }}" alt="TaskOps Logo" class="w-8 h-8 rounded-lg shadow-sm">
+        <span class="text-xl font-bold tracking-tight text-slate-900">TaskOps</span>
+      </a>
+    </div>
+    
+    <div class="flex-1 flex flex-col overflow-y-auto px-4 py-5 space-y-1">
+      <a href="{{ url_for('tasks.index') }}" hx-get="{{ url_for('tasks.index') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+        class="desktop-nav-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {% if request.blueprint == 'tasks' %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+        </svg>
+        Dasbor Tugas
+      </a>
+
+      {% if current_user.is_admin %}
+      <div class="pt-4 pb-1">
+        <p class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Administrasi</p>
+      </div>
+
+      <a href="{{ url_for('admin.logistics') }}" hx-get="{{ url_for('admin.logistics') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+        class="desktop-nav-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {% if '/admin/logistics' in request.path %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+        </svg>
+        Logistik Material
+      </a>
+
+      <a href="{{ url_for('admin.review_queue') }}" hx-get="{{ url_for('admin.review_queue') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+        class="desktop-nav-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {% if '/admin/review-queue' in request.path %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        Antrean Review
+      </a>
+
+      <a href="{{ url_for('admin.users_list') }}" hx-get="{{ url_for('admin.users_list') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+        class="desktop-nav-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {% if '/admin/users' in request.path %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+        </svg>
+        Manajemen Pengguna
+      </a>
+
+      <a href="{{ url_for('admin.teams_list') }}" hx-get="{{ url_for('admin.teams_list') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+        class="desktop-nav-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {% if '/admin/teams' in request.path %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+        </svg>
+        Manajemen Tim
+      </a>
+      {% endif %}
+
+      <div class="pt-4 pb-1">
+        <p class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Komunikasi</p>
+      </div>
+
+      <a href="{{ url_for('notifications.index') }}" hx-get="{{ url_for('notifications.index') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+        class="desktop-nav-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {% if request.blueprint == 'notifications' %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+        </svg>
+        Notifikasi
+      </a>
+    </div>
+
+    <!-- Profil Pengguna & Keluar di Sidebar -->
+    <div class="p-4 border-t border-slate-100 bg-slate-50">
+      <div class="flex items-center justify-between">
+        <a href="{{ url_for('auth.profile') }}" hx-get="{{ url_for('auth.profile') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" class="truncate flex-1 hover:opacity-80 transition-opacity" title="Buka Profil Saya">
+          <p class="text-sm font-medium text-slate-900 truncate">{{ current_user.name }}</p>
+          <p class="text-xs text-slate-500 truncate">@{{ current_user.username }} &bull; {{ current_user.role.value }}</p>
+          {% if current_user.phone_number %}
+          <p class="text-[11px] text-slate-400 truncate">{{ current_user.phone_number }}</p>
+          {% endif %}
+        </a>
+        <form action="{{ url_for('auth.logout') }}" method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" title="Keluar" class="p-2 text-slate-400 hover:text-red-600 rounded-lg transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+            </svg>
+          </button>
+        </form>
+      </div>
+    </div>
+  </aside>
+  {% endif %}
+
+  {% if current_user.is_authenticated %}
+  <!-- Mobile Slide-over Drawer Backdrop & Panel (md:hidden) -->
+  <div id="mobile-drawer-backdrop" onclick="closeMobileDrawer()" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm transition-opacity md:hidden"></div>
+  <aside id="mobile-drawer" class="fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 flex flex-col transform -translate-x-full transition-transform duration-200 ease-in-out md:hidden shadow-2xl">
+    <div class="flex items-center justify-between h-16 px-6 border-b border-slate-100">
+      <a href="{{ url_for('tasks.index') }}" hx-get="{{ url_for('tasks.index') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" onclick="closeMobileDrawer()" class="flex items-center gap-3">
+        <img src="{{ url_for('static', filename='icons/icon.svg') }}" alt="TaskOps Logo" class="w-8 h-8 rounded-lg shadow-sm">
+        <span class="text-xl font-bold tracking-tight text-slate-900">TaskOps</span>
+      </a>
+      <button type="button" onclick="closeMobileDrawer()" class="p-2 text-slate-400 hover:text-slate-600 rounded-lg">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+
+    <div class="flex-1 flex flex-col overflow-y-auto px-4 py-5 space-y-1">
+      <a href="{{ url_for('tasks.index') }}" hx-get="{{ url_for('tasks.index') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" onclick="closeMobileDrawer()" data-nav-link
+        class="desktop-nav-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {% if request.blueprint == 'tasks' %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+        </svg>
+        Dasbor Tugas
+      </a>
+
+      {% if current_user.is_admin %}
+      <div class="pt-4 pb-1">
+        <p class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Administrasi</p>
+      </div>
+
+      <a href="{{ url_for('admin.logistics') }}" hx-get="{{ url_for('admin.logistics') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" onclick="closeMobileDrawer()" data-nav-link
+        class="desktop-nav-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {% if '/admin/logistics' in request.path %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+        </svg>
+        Logistik Material
+      </a>
+
+      <a href="{{ url_for('admin.review_queue') }}" hx-get="{{ url_for('admin.review_queue') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" onclick="closeMobileDrawer()" data-nav-link
+        class="desktop-nav-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {% if '/admin/review-queue' in request.path %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        Antrean Review
+      </a>
+
+      <a href="{{ url_for('admin.users_list') }}" hx-get="{{ url_for('admin.users_list') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" onclick="closeMobileDrawer()" data-nav-link
+        class="desktop-nav-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {% if '/admin/users' in request.path %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+        </svg>
+        Manajemen Pengguna
+      </a>
+
+      <a href="{{ url_for('admin.teams_list') }}" hx-get="{{ url_for('admin.teams_list') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" onclick="closeMobileDrawer()" data-nav-link
+        class="desktop-nav-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {% if '/admin/teams' in request.path %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+        </svg>
+        Manajemen Tim
+      </a>
+      {% endif %}
+
+      <div class="pt-4 pb-1">
+        <p class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Komunikasi</p>
+      </div>
+
+      <a href="{{ url_for('notifications.index') }}" hx-get="{{ url_for('notifications.index') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" onclick="closeMobileDrawer()" data-nav-link
+        class="desktop-nav-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {% if request.blueprint == 'notifications' %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+        </svg>
+        Notifikasi
+      </a>
+
+      <a href="{{ url_for('auth.profile') }}" hx-get="{{ url_for('auth.profile') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" onclick="closeMobileDrawer()" data-nav-link
+        class="desktop-nav-link flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors {% if request.endpoint == 'auth.profile' %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-600 hover:bg-slate-50 hover:text-slate-900{% endif %}">
+        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+        </svg>
+        Profil Saya
+      </a>
+    </div>
+
+    <!-- User info & logout in mobile drawer -->
+    <div class="p-4 border-t border-slate-100 bg-slate-50">
+      <div class="flex items-center justify-between">
+        <div class="truncate flex-1">
+          <p class="text-sm font-medium text-slate-900 truncate">{{ current_user.name }}</p>
+          <p class="text-xs text-slate-500 truncate">@{{ current_user.username }} &bull; {{ current_user.role.value }}</p>
+        </div>
+        <form action="{{ url_for('auth.logout') }}" method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" title="Keluar" class="p-2 text-slate-400 hover:text-red-600 rounded-lg transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+            </svg>
+          </button>
+        </form>
+      </div>
+    </div>
+  </aside>
+  {% endif %}
+
+  <!-- Kontainer Utama -->
+  <div class="flex-1 flex flex-col {% if current_user.is_authenticated %}md:pl-64{% endif %} min-h-screen">
+    
+    <!-- Sticky Top Bar -->
+    <header class="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div class="flex items-center gap-2 sm:gap-3">
+          {% if current_user.is_authenticated %}
+          <!-- Tombol Hamburger Mobile Drawer -->
+          <button type="button" onclick="toggleMobileDrawer()" class="md:hidden p-2 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-colors" title="Menu Navigasi" aria-label="Menu Navigasi">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+          </button>
+          {% endif %}
+          {% if not current_user.is_authenticated %}
+          <a href="{{ url_for('tasks.index') }}" class="flex items-center gap-2">
+            <img src="{{ url_for('static', filename='icons/icon.svg') }}" alt="TaskOps Logo" class="w-8 h-8 rounded-lg shadow-sm">
+            <span class="text-xl font-bold tracking-tight text-slate-900">TaskOps</span>
+          </a>
+          {% else %}
+          <a href="{{ url_for('tasks.index') }}" hx-get="{{ url_for('tasks.index') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" class="flex items-center gap-2">
+            <img src="{{ url_for('static', filename='icons/icon.svg') }}" alt="TaskOps Logo" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg shadow-sm">
+            <span class="text-lg sm:text-xl font-bold tracking-tight text-slate-900">TaskOps</span>
+          </a>
+          {% endif %}
+          <span id="header-title" class="hidden md:inline-block text-sm font-medium text-slate-500">{% block header_title %}{% endblock %}</span>
+        </div>
+
+        <!-- Tombol Aksi Kanan Atas -->
+        <div class="flex items-center space-x-2">
+          <!-- Tombol Pasang Aplikasi (PWA) -->
+          <button id="btn-install-pwa" type="button" class="hidden items-center px-3 py-1.5 text-xs font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded-lg shadow-sm transition-colors">
+            <svg class="w-4 h-4 mr-1 text-brand-600 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+            </svg>
+            Pasang Aplikasi
+          </button>
+
+          {% if current_user.is_authenticated %}
+          <!-- Tombol Notifikasi Web Push -->
+          <button id="btn-enable-push" type="button" class="flex items-center px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors">
+            <svg class="w-4 h-4 mr-1 text-slate-500 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+            </svg>
+            <span>Notifikasi Web</span>
+          </button>
+
+          <!-- Lonceng Notifikasi -->
+          <a href="{{ url_for('notifications.index') }}" hx-get="{{ url_for('notifications.index') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+             class="relative p-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-50 transition-colors" title="Notifikasi">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+            </svg>
+            <span id="notification-badge" class="hidden absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-white"></span>
+          </a>
+
+          <!-- Tombol Keluar Mobile -->
+          <form action="{{ url_for('auth.logout') }}" method="POST" class="md:hidden">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" title="Keluar" class="p-2 text-slate-500 hover:text-red-600 rounded-lg">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+              </svg>
+            </button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </header>
+
+    <!-- Pesan Flash -->
+    <div id="flash-messages-container" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full mt-4">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="space-y-2">
+            {% for category, message in messages %}
+              <div class="p-4 rounded-xl text-sm font-medium border flex items-center justify-between {% if category == 'error' %}bg-red-50 text-red-800 border-red-200{% elif category == 'success' %}bg-emerald-50 text-emerald-800 border-emerald-200{% elif category == 'info' %}bg-amber-50 text-amber-800 border-amber-200{% else %}bg-blue-50 text-blue-800 border-blue-200{% endif %}">
+                <span>{{ message }}</span>
+                <button type="button" onclick="this.parentElement.remove()" class="text-xs opacity-70 hover:opacity-100">&times;</button>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+    </div>
+
+    <!-- Area Konten Utama (HTMX Target) -->
+    <main id="main-content" class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 {% if current_user.is_authenticated %}pb-24 md:pb-8{% endif %}">
+      {% block content %}{% endblock %}
+      {% block extra_scripts %}{% endblock %}
+    </main>
+
+    {% if current_user.is_authenticated %}
+    <!-- Mobile Fixed Bottom Navigation Bar (md:hidden) -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t border-slate-200 safe-bottom">
+      {% if current_user.is_admin %}
+      <!-- Bottom Bar Admin: 5 Kolom (Tugas, Tim, Pengguna, Pesan, Profil) -->
+      <div class="grid grid-cols-5 h-16">
+        <!-- 1. Tugas -->
+        <a href="{{ url_for('tasks.index') }}" hx-get="{{ url_for('tasks.index') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+           class="mobile-nav-link flex flex-col items-center justify-center py-2 transition-colors {% if request.blueprint == 'tasks' %}text-brand-600 font-semibold{% else %}text-slate-500 hover:text-slate-900{% endif %}">
+          <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+          </svg>
+          <span class="text-[11px] leading-tight">Tugas</span>
+        </a>
+
+        <!-- 2. Tim -->
+        <a href="{{ url_for('admin.teams_list') }}" hx-get="{{ url_for('admin.teams_list') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+           class="mobile-nav-link flex flex-col items-center justify-center py-2 transition-colors {% if '/admin/teams' in request.path %}text-brand-600 font-semibold{% else %}text-slate-500 hover:text-slate-900{% endif %}">
+          <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+          </svg>
+          <span class="text-[11px] leading-tight">Tim</span>
+        </a>
+
+        <!-- 3. Pengguna -->
+        <a href="{{ url_for('admin.users_list') }}" hx-get="{{ url_for('admin.users_list') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+           class="mobile-nav-link flex flex-col items-center justify-center py-2 transition-colors {% if '/admin/users' in request.path %}text-brand-600 font-semibold{% else %}text-slate-500 hover:text-slate-900{% endif %}">
+          <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+          </svg>
+          <span class="text-[11px] leading-tight">Pengguna</span>
+        </a>
+
+        <!-- 4. Pesan -->
+        <a href="{{ url_for('notifications.index') }}" hx-get="{{ url_for('notifications.index') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+           class="mobile-nav-link relative flex flex-col items-center justify-center py-2 transition-colors {% if request.blueprint == 'notifications' %}text-brand-600 font-semibold{% else %}text-slate-500 hover:text-slate-900{% endif %}">
+          <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+          </svg>
+          <span class="text-[11px] leading-tight">Pesan</span>
+        </a>
+
+        <!-- 5. Profil -->
+        <a href="{{ url_for('auth.profile') }}" hx-get="{{ url_for('auth.profile') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+           class="mobile-nav-link flex flex-col items-center justify-center py-2 transition-colors {% if request.endpoint == 'auth.profile' %}text-brand-600 font-semibold{% else %}text-slate-500 hover:text-slate-900{% endif %}">
+          <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+          </svg>
+          <span class="text-[11px] leading-tight">Profil</span>
+        </a>
+      </div>
+      {% else %}
+      <!-- Bottom Bar Staff: 3 Kolom (Tugas, Pesan, Profil) - Hapus Duplikat "Aktivitas" -->
+      <div class="grid grid-cols-3 h-16">
+        <!-- 1. Tugas -->
+        <a href="{{ url_for('tasks.index') }}" hx-get="{{ url_for('tasks.index') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+           class="mobile-nav-link flex flex-col items-center justify-center py-2.5 transition-colors {% if request.blueprint == 'tasks' %}text-brand-600 font-semibold{% else %}text-slate-500 hover:text-slate-900{% endif %}">
+          <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+          </svg>
+          <span class="text-xs">Tugas</span>
+        </a>
+
+        <!-- 2. Pesan -->
+        <a href="{{ url_for('notifications.index') }}" hx-get="{{ url_for('notifications.index') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+           class="mobile-nav-link relative flex flex-col items-center justify-center py-2.5 transition-colors {% if request.blueprint == 'notifications' %}text-brand-600 font-semibold{% else %}text-slate-500 hover:text-slate-900{% endif %}">
+          <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+          </svg>
+          <span class="text-xs">Pesan</span>
+        </a>
+
+        <!-- 3. Profil -->
+        <a href="{{ url_for('auth.profile') }}" hx-get="{{ url_for('auth.profile') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true" data-nav-link
+           class="mobile-nav-link flex flex-col items-center justify-center py-2.5 transition-colors {% if request.endpoint == 'auth.profile' %}text-brand-600 font-semibold{% else %}text-slate-500 hover:text-slate-900{% endif %}">
+          <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+          </svg>
+          <span class="text-xs">Profil</span>
+        </a>
+      </div>
+      {% endif %}
+    </nav>
+    {% endif %}
+
+  </div>
+
+  <!-- PWA, Push & HTMX Client Scripts -->
+  <script src="{{ url_for('static', filename='js/push.js') }}"></script>
+  <script>
+    // Offline indicator listener
+    window.addEventListener('online', () => document.getElementById('offline-indicator')?.classList.add('hidden'));
+    window.addEventListener('offline', () => document.getElementById('offline-indicator')?.classList.remove('hidden'));
+    if (!navigator.onLine) document.getElementById('offline-indicator')?.classList.remove('hidden');
+
+    // Auto-inject CSRF token into all HTMX AJAX requests
+    document.body.addEventListener('htmx:configRequest', (event) => {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      if (csrfToken) {
+        event.detail.headers['X-CSRFToken'] = csrfToken;
+      }
+    });
+
+    // Top progress bar animation for HTMX requests
+    document.body.addEventListener('htmx:beforeRequest', () => {
+      const bar = document.getElementById('htmx-progress-bar');
+      if (bar) {
+        bar.style.width = '20%';
+        bar.style.opacity = '1';
+        setTimeout(() => { if (bar.style.opacity === '1') bar.style.width = '70%'; }, 150);
+      }
+    });
+
+    document.body.addEventListener('htmx:afterOnLoad', () => {
+      const bar = document.getElementById('htmx-progress-bar');
+      if (bar) {
+        bar.style.width = '100%';
+        setTimeout(() => {
+          bar.style.opacity = '0';
+          setTimeout(() => { bar.style.width = '0%'; }, 250);
+        }, 120);
+      }
+    });
+
+    // Dynamic active navigation highlighting for persistent shell
+    function updateActiveNav() {
+      const path = window.location.pathname;
+      document.querySelectorAll('[data-nav-link]').forEach(el => {
+        const href = el.getAttribute('href');
+        if (!href) return;
+        const isActive = (href === path) || 
+          (href !== '/' && href !== '/tasks' && href !== '/tasks/' && path.startsWith(href)) || 
+          ((href === '/tasks' || href === '/tasks/') && (path === '/' || path === '/tasks' || path === '/tasks/'));
+
+        if (el.classList.contains('desktop-nav-link')) {
+          el.classList.toggle('bg-brand-50', isActive);
+          el.classList.toggle('text-brand-700', isActive);
+          el.classList.toggle('font-semibold', isActive);
+          el.classList.toggle('text-slate-600', !isActive);
+        }
+
+        if (el.classList.contains('mobile-nav-link')) {
+          el.classList.toggle('text-brand-600', isActive);
+          el.classList.toggle('font-semibold', isActive);
+          el.classList.toggle('text-slate-500', !isActive);
+        }
+      });
+    }
+
+    // Global Modal Utilities for SPA
+    window.openModal = function(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('hidden');
+    };
+
+    window.closeModal = function(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('hidden');
+      document.querySelectorAll('[id$="-error"]').forEach(err => err.classList.add('hidden'));
+    };
+
+    // Global Image Lightbox Modal Utilities
+    window.openImageLightbox = function(url, caption) {
+      const modal = document.getElementById('modal-image-lightbox');
+      const img = document.getElementById('lightbox-image');
+      const cap = document.getElementById('lightbox-caption');
+      if (modal && img) {
+        img.src = url;
+        if (cap) cap.textContent = caption || '';
+        modal.classList.remove('hidden');
+      }
+    };
+
+    window.closeImageLightbox = function() {
+      const modal = document.getElementById('modal-image-lightbox');
+      const img = document.getElementById('lightbox-image');
+      if (modal) {
+        modal.classList.add('hidden');
+        if (img) img.src = '';
+      }
+    };
+
+    // Mobile Drawer Utilities
+    window.toggleMobileDrawer = function() {
+      const drawer = document.getElementById('mobile-drawer');
+      const backdrop = document.getElementById('mobile-drawer-backdrop');
+      if (!drawer) return;
+      const isClosed = drawer.classList.contains('-translate-x-full');
+      if (isClosed) {
+        drawer.classList.remove('-translate-x-full');
+        backdrop?.classList.remove('hidden');
+      } else {
+        drawer.classList.add('-translate-x-full');
+        backdrop?.classList.add('hidden');
+      }
+    };
+
+    window.closeMobileDrawer = function() {
+      const drawer = document.getElementById('mobile-drawer');
+      const backdrop = document.getElementById('mobile-drawer-backdrop');
+      if (drawer) drawer.classList.add('-translate-x-full');
+      if (backdrop) backdrop.classList.add('hidden');
+    };
+
+    document.body.addEventListener('htmx:afterSwap', () => {
+      updateActiveNav();
+      closeMobileDrawer();
+    });
+    window.addEventListener('popstate', () => {
+      updateActiveNav();
+      closeMobileDrawer();
+    });
+  </script>
+  {% if current_user.is_authenticated %}
+  <script>
+    async function updateUnreadCount() {
+      try {
+        const res = await fetch('{{ url_for("notifications.unread_count") }}');
+        const data = await res.json();
+        const badge = document.getElementById('notification-badge');
+        if (badge) {
+          if (data.unread_count > 0) {
+            badge.classList.remove('hidden');
+          } else {
+            badge.classList.add('hidden');
+          }
+        }
+      } catch (e) {}
+    }
+    document.addEventListener('DOMContentLoaded', updateUnreadCount);
+    setInterval(updateUnreadCount, 45000);
+  </script>
+  {% endif %}
+  <!-- Modal Lightbox Pratinjau Foto Global -->
+  <div id="modal-image-lightbox" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 transition-all" onclick="closeImageLightbox()">
+    <div class="relative max-w-4xl max-h-[90vh] flex flex-col items-center justify-center" onclick="event.stopPropagation()">
+      <button type="button" onclick="closeImageLightbox()" class="absolute -top-10 right-0 text-white hover:text-slate-300 transition-colors p-1" title="Tutup">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+      <img id="lightbox-image" src="" alt="Pratinjau Foto" class="max-w-full max-h-[80vh] rounded-xl object-contain shadow-2xl bg-black/20">
+      <div id="lightbox-caption" class="mt-2 text-xs text-white/90 font-medium text-center truncate max-w-md"></div>
+    </div>
+  </div>
+</body>
+</html>

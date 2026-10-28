@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+{% from "components/badges.html" import task_status_badge, item_status_badge %}
+
+{% block title %}Logistik Material - TaskOps{% endblock %}
+{% block header_title %}Logistik Material{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header Halaman -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900">Logistik Material Proyek</h1>
+      <p class="text-sm text-slate-500 mt-0.5">Pantau dan kelola alur pemenuhan kebutuhan material dari seluruh penugasan lapangan</p>
+    </div>
+  </div>
+
+  <!-- Tab Filter Status Material & Bilah Pencarian Real-Time -->
+  <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between gap-4">
+    <!-- Tabs Filter Status -->
+    <div class="flex flex-wrap gap-1 p-1 bg-slate-100 rounded-xl">
+      <a href="{{ url_for('admin.logistics', tab='all') }}"
+        hx-get="{{ url_for('admin.logistics', tab='all') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'all' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+        Semua ({{ counts.all }})
+      </a>
+      <a href="{{ url_for('admin.logistics', tab='REQUESTED') }}"
+        hx-get="{{ url_for('admin.logistics', tab='REQUESTED') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'REQUESTED' %}bg-amber-100 text-amber-900 shadow-sm font-bold{% else %}text-amber-800 hover:text-amber-900{% endif %}">
+        Diajukan ({{ counts.REQUESTED }})
+      </a>
+      <a href="{{ url_for('admin.logistics', tab='ORDERED') }}"
+        hx-get="{{ url_for('admin.logistics', tab='ORDERED') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'ORDERED' %}bg-sky-100 text-sky-900 shadow-sm font-bold{% else %}text-sky-800 hover:text-sky-900{% endif %}">
+        Dipesan ({{ counts.ORDERED }})
+      </a>
+      <a href="{{ url_for('admin.logistics', tab='SHIPPED') }}"
+        hx-get="{{ url_for('admin.logistics', tab='SHIPPED') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'SHIPPED' %}bg-indigo-100 text-indigo-900 shadow-sm font-bold{% else %}text-indigo-800 hover:text-indigo-900{% endif %}">
+        Dikirim ({{ counts.SHIPPED }})
+      </a>
+      <a href="{{ url_for('admin.logistics', tab='RECEIVED') }}"
+        hx-get="{{ url_for('admin.logistics', tab='RECEIVED') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'RECEIVED' %}bg-emerald-100 text-emerald-900 shadow-sm font-bold{% else %}text-emerald-800 hover:text-emerald-900{% endif %}">
+        Diterima ({{ counts.RECEIVED }})
+      </a>
+      <a href="{{ url_for('admin.logistics', tab='REJECTED') }}"
+        hx-get="{{ url_for('admin.logistics', tab='REJECTED') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'REJECTED' %}bg-red-100 text-red-900 shadow-sm font-bold{% else %}text-red-800 hover:text-red-900{% endif %}">
+        Ditolak ({{ counts.get('REJECTED', 0) }})
+      </a>
+    </div>
+
+    <!-- Bilah Pencarian Real-Time -->
+    <div class="relative flex-1 max-w-sm">
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+      </div>
+      <input type="text" id="logistics-search-input" onkeyup="filterLogisticsList()"
+        placeholder="Cari nama barang, tugas, pemohon..."
+        class="w-full pl-9 pr-3 py-2 text-xs sm:text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors">
+    </div>
+  </div>
+
+  <!-- Daftar Kartu Logistik Dikelompokkan per Tugas -->
+  {% if grouped_tasks %}
+  <div class="space-y-6" id="logistics-container">
+    {% for gt in grouped_tasks %}
+    {% set task = gt.task %}
+    {% set search_data = (task.title|lower) ~ ' ' ~ (task.creator.name|lower) %}
+    {% if task.assigned_user %}
+      {% set search_data = search_data ~ ' ' ~ (task.assigned_user.name|lower) ~ ' @' ~ (task.assigned_user.username|lower) %}
+    {% elif task.assigned_team %}
+      {% set search_data = search_data ~ ' ' ~ (task.assigned_team.name|lower) %}
+    {% endif %}
+    {% for it in gt.item_list %}
+      {% set search_data = search_data ~ ' ' ~ (it.item_name|lower) ~ ' ' ~ ((it.notes or '')|lower) ~ ' ' ~ (it.requester.name|lower) %}
+    {% endfor %}
+
+    <div class="logistics-card bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
+         data-search="{{ search_data }}">
+
+      <!-- Header Kartu Tugas -->
+      <div class="p-5 bg-slate-50/75 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h3 class="text-base font-bold text-slate-900">
+              <a href="{{ url_for('tasks.detail', task_id=task.id) }}" class="hover:text-brand-600 transition-colors">
+                {{ task.title }}
+              </a>
+            </h3>
+            {{ task_status_badge(task.status) }}
+          </div>
+
+          <div class="flex items-center gap-4 text-xs text-slate-500 mt-1">
+            <span>
+              <strong>Penerima:</strong>
+              {% if task.assigned_user %}
+                {{ task.assigned_user.name }} (@{{ task.assigned_user.username }})
+              {% elif task.assigned_team %}
+                Tim {{ task.assigned_team.name }}
+              {% else %}
+                -
+              {% endif %}
+            </span>
+            <span>&bull;</span>
+            <span>{{ gt.item_list|length }} barang pada kategori ini</span>
+          </div>
+        </div>
+
+        <!-- Tombol Aksi Batch per Tugas -->
+        <div class="flex items-center gap-2 self-start sm:self-auto">
+          {% if gt.has_requested %}
+          <form action="{{ url_for('admin.task_order_all_items', task_id=task.id) }}"
+                hx-post="{{ url_for('admin.task_order_all_items', task_id=task.id) }}"
+                hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit"
+              class="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-sky-800 bg-sky-100 hover:bg-sky-200 border border-sky-300 rounded-xl transition-colors shadow-sm">
+              <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+              </svg>
+              Pesan Semua Barang
+            </button>
+          </form>
+          {% endif %}
+
+          {% if gt.has_ordered %}
+          <form action="{{ url_for('admin.task_ship_all_items', task_id=task.id) }}"
+                hx-post="{{ url_for('admin.task_ship_all_items', task_id=task.id) }}"
+                hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit"
+              class="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-indigo-800 bg-indigo-100 hover:bg-indigo-200 border border-indigo-300 rounded-xl transition-colors shadow-sm">
+              <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+              </svg>
+              Kirim Semua Barang
+            </button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Tabel Daftar Material -->
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-100 text-left text-xs sm:text-sm">
+          <thead class="bg-slate-50/50 text-slate-500 uppercase text-[11px] font-semibold tracking-wider">
+            <tr>
+              <th class="py-3 px-4">Nama Material</th>
+              <th class="py-3 px-4">Jumlah</th>
+              <th class="py-3 px-4">Pemohon</th>
+              <th class="py-3 px-4">Catatan Spesifikasi</th>
+              <th class="py-3 px-4">Status & Tanggal</th>
+              <th class="py-3 px-4 text-right">Aksi Administrator</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for it in gt.item_list %}
+            <tr class="hover:bg-slate-50/60 transition-colors">
+              <td class="py-3.5 px-4 font-semibold text-slate-800">{{ it.item_name }}</td>
+              <td class="py-3.5 px-4 font-medium text-slate-700 whitespace-nowrap">{{ it.quantity }}</td>
+              <td class="py-3.5 px-4 text-slate-600 whitespace-nowrap">
+                {{ it.requester.name }}
+                <span class="text-[11px] text-slate-400 block">@{{ it.requester.username }}</span>
+              </td>
+              <td class="py-3.5 px-4 text-slate-500 max-w-xs truncate">
+                {{ it.notes or '-' }}
+              </td>
+              <td class="py-3.5 px-4 whitespace-nowrap space-y-1">
+                <div>{{ item_status_badge(it.status) }}</div>
+                <div class="text-[10px] text-slate-400">
+                  Diajukan: {{ it.requested_at.strftime('%d/%m/%Y %H:%M') }}
+                  {% if it.ordered_at %}
+                  <br>Dipesan: {{ it.ordered_at.strftime('%d/%m/%Y %H:%M') }}
+                  {% endif %}
+                  {% if it.shipped_at %}
+                  <br>Dikirim: {{ it.shipped_at.strftime('%d/%m/%Y %H:%M') }}
+                  {% endif %}
+                  {% if it.received_at %}
+                  <br>Diterima: {{ it.received_at.strftime('%d/%m/%Y %H:%M') }}
+                  {% endif %}
+                </div>
+              </td>
+              <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                {% if it.status == ItemStatus.REQUESTED %}
+                <div class="inline-flex items-center gap-1.5">
+                  <form action="{{ url_for('admin.item_order', item_id=it.id) }}"
+                        hx-post="{{ url_for('admin.item_order', item_id=it.id) }}"
+                        hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML" method="POST" class="inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit"
+                      class="px-3 py-1.5 text-xs font-semibold text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl transition-colors">
+                      Tandai Dipesan
+                    </button>
+                  </form>
+                  <button type="button"
+                    data-id="{{ it.id }}"
+                    data-name="{{ it.item_name }}"
+                    onclick="openRejectModal(this.dataset.id, this.dataset.name)"
+                    class="px-2.5 py-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors">
+                    Tolak
+                  </button>
+                </div>
+                {% elif it.status == ItemStatus.ORDERED %}
+                <form action="{{ url_for('admin.item_ship', item_id=it.id) }}"
+                      hx-post="{{ url_for('admin.item_ship', item_id=it.id) }}"
+                      hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML" method="POST" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit"
+                    class="px-3 py-1.5 text-xs font-semibold text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors">
+                    Tandai Dikirim
+                  </button>
+                </form>
+                {% elif it.status == ItemStatus.SHIPPED %}
+                <span class="inline-flex items-center text-[11px] font-medium text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                  <svg class="w-3.5 h-3.5 mr-1 text-amber-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  Menunggu Konfirmasi Lapangan
+                </span>
+                {% elif it.status == ItemStatus.RECEIVED %}
+                <span class="inline-flex items-center text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                  <svg class="w-3.5 h-3.5 mr-1 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                  Telah Diterima
+                </span>
+                {% elif it.status.value == 'REJECTED' %}
+                <span class="text-xs text-red-600 font-medium">
+                  {{ it.rejection_reason or 'Ditolak' }}
+                </span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
+    <svg class="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+    </svg>
+    <p class="text-sm font-medium text-slate-600">Tidak ada pengajuan material pada kategori ini</p>
+    <p class="text-xs text-slate-400 mt-1">Material yang diajukan oleh staf pelaksana akan muncul secara otomatis di sini.</p>
+  </div>
+  {% endif %}
+
+</div>
+<!-- Modal Tolak Material -->
+<div id="modal-reject-item" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex items-center gap-3 pb-3 border-b border-slate-100">
+      <div class="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-slate-900">Tolak Permintaan Material</h3>
+        <p class="text-xs text-slate-500" id="reject-item-name">Bahan</p>
+      </div>
+    </div>
+
+    <form id="form-reject-item" method="POST" class="mt-4 space-y-4"
+          hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML"
+          onsubmit="closeRejectModal()">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label for="rejection_reason" class="block text-xs font-semibold text-slate-700 uppercase mb-1">
+          Alasan Penolakan <span class="text-red-500">*</span>
+        </label>
+        <textarea id="rejection_reason" name="rejection_reason" rows="3" required minlength="3"
+          placeholder="contoh: Stok sudah tersedia di gudang utama, tidak perlu dibeli baru..."
+          class="block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"></textarea>
+      </div>
+
+      <div class="pt-3 flex justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeRejectModal()"
+          class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+          Batal
+        </button>
+        <button type="submit"
+          class="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-sm transition-colors">
+          Konfirmasi Tolak Material
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  window.openRejectModal = function(itemId, itemName) {
+    document.getElementById('reject-item-name').textContent = 'Item: ' + itemName;
+    const form = document.getElementById('form-reject-item');
+    const url = '/admin/logistics/' + itemId + '/reject';
+    form.action = url;
+    form.setAttribute('hx-post', url);
+    if (window.htmx) htmx.process(form);
+    document.getElementById('modal-reject-item').classList.remove('hidden');
+  };
+
+  window.closeRejectModal = function() {
+    document.getElementById('modal-reject-item').classList.add('hidden');
+  };
+
+  window.filterLogisticsList = function() {
+    const q = document.getElementById('logistics-search-input').value.toLowerCase().trim();
+    const cards = document.querySelectorAll('.logistics-card');
+    cards.forEach(c => {
+      const data = c.getAttribute('data-search') || '';
+      if (!q || data.includes(q)) {
+        c.style.display = '';
+      } else {
+        c.style.display = 'none';
+      }
+    });
+  };
+</script>
+{% endblock %}

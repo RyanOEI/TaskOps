@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="indigoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#3730a3" />
+    </linearGradient>
+  </defs>
+  <!-- Rounded Square Background -->
+  <rect width="512" height="512" rx="112" fill="url(#indigoGradient)" />
+  <!-- Inner White Checklist & Lightning Design -->
+  <g fill="none" stroke="#ffffff" stroke-width="32" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Clipboard Frame -->
+    <rect x="116" y="128" width="280" height="300" rx="40" stroke="#ffffff" stroke-width="28" fill="rgba(255, 255, 255, 0.08)" />
+    <!-- Clip Top Handle -->
+    <path d="M206 128 V100 A24 24 0 0 1 230 76 H282 A24 24 0 0 1 306 100 V128" stroke="#ffffff" stroke-width="28" fill="#4f46e5" />
+    <!-- Task Checkmark 1 -->
+    <path d="M168 214 L198 244 L258 184" stroke="#34d399" stroke-width="28" />
+    <line x1="288" y1="214" x2="352" y2="214" stroke="#ffffff" stroke-width="24" stroke-opacity="0.8" />
+    <!-- Task Checkmark 2 -->
+    <path d="M168 294 L198 324 L258 264" stroke="#34d399" stroke-width="28" />
+    <line x1="288" y1="294" x2="352" y2="294" stroke="#ffffff" stroke-width="24" stroke-opacity="0.8" />
+    <!-- Lightning Ops Action Accent -->
+    <polygon points="340,320 310,380 345,380 325,430 380,365 345,365" fill="#f59e0b" stroke="#f59e0b" stroke-width="12" />
+  </g>
+</svg>
+

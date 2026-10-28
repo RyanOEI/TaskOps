@@ -1,0 +1,618 @@
+{% extends "base.html" %}
+
+{% block title %}Manajemen Pengguna - TaskOps{% endblock %}
+{% block header_title %}Manajemen Pengguna{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header & Tombol Tambah Pengguna -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900">Manajemen Pengguna</h1>
+      <p class="text-sm text-slate-500 mt-0.5">Kelola akun pengguna, peran akses, dan keamanan sistem</p>
+    </div>
+    <div>
+      <button type="button" onclick="openModal('modal-create-user')"
+        class="inline-flex items-center justify-center w-full sm:w-auto px-4 py-2.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-all active:scale-[0.99]">
+        <svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+        Tambah Pengguna Baru
+      </button>
+    </div>
+  </div>
+
+  <!-- Tab Filter Status & Bilah Pencarian Real-Time -->
+  <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between gap-4">
+    <!-- Tabs Filter -->
+    <div class="flex space-x-1 p-1 bg-slate-100 rounded-xl max-w-fit">
+      <a href="{{ url_for('admin.users_list', tab='active') }}"
+        hx-get="{{ url_for('admin.users_list', tab='active') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'active' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+        Aktif ({{ counts.active }})
+      </a>
+      <a href="{{ url_for('admin.users_list', tab='inactive') }}"
+        hx-get="{{ url_for('admin.users_list', tab='inactive') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'inactive' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+        Nonaktif ({{ counts.inactive }})
+      </a>
+      <a href="{{ url_for('admin.users_list', tab='all') }}"
+        hx-get="{{ url_for('admin.users_list', tab='all') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'all' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+        Semua ({{ counts.all }})
+      </a>
+    </div>
+
+    <!-- Bilah Pencarian Real-Time -->
+    <div class="relative flex-1 max-w-sm">
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+      </div>
+      <input type="text" id="user-search-input" onkeyup="filterUserList()"
+        placeholder="Cari nama, @username, no HP..."
+        class="w-full pl-9 pr-3 py-2 text-xs sm:text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors">
+    </div>
+  </div>
+
+  <!-- Daftar Pengguna (Tabel di Desktop, Kartu di Mobile) -->
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    {% if users %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-100 text-left text-sm" id="users-table">
+        <thead class="bg-slate-50/75 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <tr>
+            <th class="py-3.5 px-4 sm:px-6">Pengguna</th>
+            <th class="py-3.5 px-4">Kontak</th>
+            <th class="py-3.5 px-4">Peran & Status</th>
+            <th class="py-3.5 px-4">Keanggotaan Tim (Read-Only)</th>
+            <th class="py-3.5 px-4 sm:px-6 text-right">Aksi</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100" id="users-tbody">
+          {% for u in users %}
+          <tr class="user-row hover:bg-slate-50/60 transition-colors"
+              data-search="{{ u.name|lower }} {{ u.username|lower }} {{ (u.phone_number or '')|lower }} {{ (u.email or '')|lower }}">
+            <!-- Nama & Username -->
+            <td class="py-4 px-4 sm:px-6">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-brand-50 text-brand-700 font-bold flex items-center justify-center border border-brand-100 shrink-0">
+                  {{ u.name[:1]|upper }}
+                </div>
+                <div>
+                  <div class="font-semibold text-slate-900">{{ u.name }}</div>
+                  <div class="text-xs text-slate-400">@{{ u.username }}</div>
+                </div>
+              </div>
+            </td>
+
+            <!-- Kontak -->
+            <td class="py-4 px-4 whitespace-nowrap text-xs text-slate-600 space-y-0.5">
+              {% if u.phone_number %}
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
+                </svg>
+                <span>{{ u.phone_number }}</span>
+              </div>
+              {% endif %}
+              {% if u.email %}
+              <div class="flex items-center gap-1.5 text-slate-500">
+                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                </svg>
+                <span>{{ u.email }}</span>
+              </div>
+              {% endif %}
+              {% if not u.phone_number and not u.email %}
+              <span class="text-slate-400 italic">Tidak ada kontak</span>
+              {% endif %}
+            </td>
+
+            <!-- Peran & Status -->
+            <td class="py-4 px-4 whitespace-nowrap space-y-1">
+              <div>
+                {% if u.is_admin %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                  Administrator
+                </span>
+                {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                  Staff
+                </span>
+                {% endif %}
+              </div>
+              <div>
+                {% if u.is_active %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-emerald-500"></span>
+                  Aktif
+                </span>
+                {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                  <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-slate-400"></span>
+                  Nonaktif
+                </span>
+                {% endif %}
+              </div>
+            </td>
+
+            <!-- Keanggotaan Tim (Read-Only) -->
+            <td class="py-4 px-4">
+              <div class="flex flex-wrap gap-1 max-w-xs">
+                {% if u.active_teams %}
+                  {% for t in u.active_teams %}
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200" title="{{ t.description or t.name }}">
+                    {{ t.name }}
+                  </span>
+                  {% endfor %}
+                {% else %}
+                  <span class="text-xs text-slate-400 italic">Belum ada tim</span>
+                {% endif %}
+              </div>
+            </td>
+
+            <!-- Aksi -->
+            <td class="py-4 px-4 sm:px-6 text-right whitespace-nowrap">
+              <div class="inline-flex items-center space-x-1">
+                <!-- Tombol Edit Profil -->
+                <button type="button"
+                  data-id="{{ u.id }}"
+                  data-username="{{ u.username }}"
+                  data-name="{{ u.name }}"
+                  data-email="{{ u.email or '' }}"
+                  data-phone="{{ u.phone_number or '' }}"
+                  data-role="{{ u.role.value }}"
+                  onclick="openEditUserModal(this.dataset.id, this.dataset.username, this.dataset.name, this.dataset.email, this.dataset.phone, this.dataset.role)"
+                  class="p-1.5 text-slate-600 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition-colors" title="Edit Profil">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                  </svg>
+                </button>
+
+                <!-- Tombol Ubah Sandi -->
+                <button type="button"
+                  data-id="{{ u.id }}"
+                  data-username="{{ u.username }}"
+                  data-name="{{ u.name }}"
+                  onclick="openResetPasswordModal(this.dataset.id, this.dataset.username, this.dataset.name)"
+                  class="p-1.5 text-slate-600 hover:text-amber-600 hover:bg-slate-100 rounded-lg transition-colors" title="Ubah Kata Sandi">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                  </svg>
+                </button>
+
+                {% if not u.is_active %}
+                <!-- Tombol Aktifkan Kembali -->
+                <form action="{{ url_for('admin.user_reactivate', user_id=u.id) }}" method="POST" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Aktifkan Kembali">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                  </button>
+                </form>
+                {% endif %}
+
+                <!-- Tombol Hapus Cerdas (Smart Deletion) -->
+                {% if u.id == current_user.id %}
+                <button type="button" disabled class="p-1.5 text-slate-300 cursor-not-allowed" title="Akun Anda sedang aktif">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                  </svg>
+                </button>
+                {% else %}
+                <button type="button"
+                  data-id="{{ u.id }}"
+                  data-username="{{ u.username }}"
+                  data-name="{{ u.name }}"
+                  onclick="openDeleteUserModal(this.dataset.id, this.dataset.username, this.dataset.name)"
+                  class="p-1.5 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Hapus Pengguna">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                  </svg>
+                </button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="py-12 text-center text-slate-400">
+      <svg class="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+      </svg>
+      <p class="text-sm font-medium text-slate-600">Tidak ada data pengguna pada tab ini</p>
+      <p class="text-xs text-slate-400 mt-1">Gunakan tombol "Tambah Pengguna Baru" untuk mendaftarkan akun.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: TAMBAH PENGGUNA BARU (ANTI-RESET FORM) -->
+<!-- ========================================================================= -->
+<div id="modal-create-user" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+      <h3 class="text-lg font-bold text-slate-900">Tambah Pengguna Baru</h3>
+      <button type="button" onclick="closeModal('modal-create-user')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+    </div>
+
+    <!-- Alert Error Banner di dalam Modal (Tanpa Tutup Modal) -->
+    <div id="create-user-error" class="hidden mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 font-medium"></div>
+
+    <form id="form-create-user" onsubmit="submitCreateUser(event)" class="mt-4 space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase">Username <span class="text-red-500">*</span></label>
+        <input type="text" id="create-username" name="username" required minlength="3" maxlength="30" placeholder="contoh: budi_ops"
+          class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        <p class="text-[11px] text-slate-400 mt-0.5">Alfanumerik, titik, atau garis bawah (3–30 karakter).</p>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase">Nama Lengkap <span class="text-red-500">*</span></label>
+        <input type="text" id="create-name" name="name" required minlength="2" placeholder="contoh: Budi Setiawan"
+          class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase">No. Telepon (E.164)</label>
+          <input type="text" id="create-phone" name="phone_number" placeholder="+6281234567890"
+            class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase">Email (Opsional)</label>
+          <input type="email" id="create-email" name="email" placeholder="budi@example.com"
+            class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase">Peran Akses <span class="text-red-500">*</span></label>
+        <select name="role" class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none">
+          <option value="{{ RoleEnum.STAFF.value }}">Staff (Pelaksana Tugas & Pengaju Material)</option>
+          <option value="{{ RoleEnum.ADMIN.value }}">Administrator (Kelola Pengguna, Tim, & Review)</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase">Kata Sandi Awal <span class="text-red-500">*</span></label>
+        <input type="password" id="create-password" name="password" required minlength="6" placeholder="Minimal 6 karakter"
+          class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        <p class="text-[11px] text-slate-400 mt-0.5">Wajib minimal 6 karakter.</p>
+      </div>
+
+      <div class="pt-3 flex justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-create-user')"
+          class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+          Batal
+        </button>
+        <button type="submit" id="btn-submit-create-user"
+          class="px-4 py-2 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-colors">
+          Simpan Pengguna
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: EDIT PROFIL PENGGUNA -->
+<!-- ========================================================================= -->
+<div id="modal-edit-user" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+      <h3 class="text-lg font-bold text-slate-900">Edit Profil Pengguna</h3>
+      <button type="button" onclick="closeModal('modal-edit-user')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+    </div>
+
+    <!-- Alert Error Banner di dalam Modal Edit -->
+    <div id="edit-user-error" class="hidden mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 font-medium"></div>
+
+    <form id="form-edit-user" onsubmit="submitEditUser(event)" method="POST" class="mt-4 space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase">Username <span class="text-red-500">*</span></label>
+        <input type="text" id="edit-username" name="username" required minlength="3" maxlength="30"
+          class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase">Nama Lengkap <span class="text-red-500">*</span></label>
+        <input type="text" id="edit-name" name="name" required minlength="2"
+          class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase">No. Telepon (E.164)</label>
+          <input type="text" id="edit-phone" name="phone_number"
+            class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase">Email (Opsional)</label>
+          <input type="email" id="edit-email" name="email"
+            class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase">Peran Akses <span class="text-red-500">*</span></label>
+        <select id="edit-role" name="role" class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none">
+          <option value="{{ RoleEnum.STAFF.value }}">Staff</option>
+          <option value="{{ RoleEnum.ADMIN.value }}">Administrator</option>
+        </select>
+      </div>
+
+      <div class="pt-3 flex justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-edit-user')"
+          class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+          Batal
+        </button>
+        <button type="submit" id="btn-submit-edit-user"
+          class="px-4 py-2 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-colors">
+          Perbarui Profil
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: UBAH KATA SANDI (DEDICATED RESET PASSWORD) -->
+<!-- ========================================================================= -->
+<div id="modal-reset-password" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+      <div>
+        <h3 class="text-lg font-bold text-slate-900">Ubah Kata Sandi</h3>
+        <p class="text-xs text-slate-500 mt-0.5" id="reset-target-user">Pengguna: ...</p>
+      </div>
+      <button type="button" onclick="closeModal('modal-reset-password')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+    </div>
+
+    <!-- Alert Error Banner di dalam Modal Reset Password -->
+    <div id="reset-password-error" class="hidden mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 font-medium"></div>
+
+    <form id="form-reset-password" onsubmit="submitResetPassword(event)" method="POST" class="mt-4 space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase">Kata Sandi Baru <span class="text-red-500">*</span></label>
+        <input type="password" id="reset-new-password" name="new_password" required minlength="6" placeholder="Minimal 6 karakter"
+          class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase">Konfirmasi Kata Sandi Baru <span class="text-red-500">*</span></label>
+        <input type="password" id="reset-confirm-password" name="confirm_password" required minlength="6" placeholder="Ketik ulang kata sandi baru"
+          class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+      </div>
+
+      <div class="pt-3 flex justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-reset-password')"
+          class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+          Batal
+        </button>
+        <button type="submit" id="btn-submit-reset-password"
+          class="px-4 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-sm transition-colors">
+          Simpan Kata Sandi
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: KONFIRMASI PENGHAPUSAN CERDAS (SMART DELETION) -->
+<!-- ========================================================================= -->
+<div id="modal-delete-user" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex items-center gap-3 pb-3 border-b border-slate-100">
+      <div class="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-slate-900">Konfirmasi Penghapusan Pengguna</h3>
+        <p class="text-xs text-slate-500 mt-0.5" id="delete-user-label">@username</p>
+      </div>
+    </div>
+
+    <div class="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 space-y-1">
+      <p class="font-semibold">Informasi Sistem:</p>
+      <p>Jika pengguna ini memiliki riwayat tugas atau pengajuan material, sistem akan <strong>menonaktifkannya (mengarsipkan)</strong> dan otomatis mencabut keanggotaan dari seluruh tim demi integritas data.</p>
+      <p>Jika akun ini belum memiliki riwayat aktivitas, data akan <strong>dihapus secara permanen</strong>.</p>
+    </div>
+
+    <form id="form-delete-user" method="POST" class="mt-5 flex justify-end gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="button" onclick="closeModal('modal-delete-user')"
+        class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+        Batal
+      </button>
+      <button type="submit"
+        class="px-4 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-sm transition-colors">
+        Lanjutkan Hapus
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Submit AJAX untuk Tambah Pengguna: Mencegah modal tertutup dan menjaga input
+  window.submitCreateUser = async function(e) {
+    e.preventDefault();
+    const form = document.getElementById('form-create-user');
+    const errBox = document.getElementById('create-user-error');
+    const btnSubmit = document.getElementById('btn-submit-create-user');
+
+    errBox.classList.add('hidden');
+    errBox.textContent = '';
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Menyimpan...';
+
+    const formData = new FormData(form);
+
+    try {
+      const res = await fetch('{{ url_for("admin.user_create") }}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') {
+        errBox.textContent = data.message || 'Terjadi kesalahan validasi.';
+        errBox.classList.remove('hidden');
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = 'Simpan Pengguna';
+        return;
+      }
+
+      // Berhasil
+      window.location.reload();
+    } catch (err) {
+      errBox.textContent = 'Gagal menghubungi server. Silakan coba lagi.';
+      errBox.classList.remove('hidden');
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = 'Simpan Pengguna';
+    }
+  };
+
+  // Submit AJAX untuk Edit Pengguna
+  window.submitEditUser = async function(e) {
+    e.preventDefault();
+    const form = document.getElementById('form-edit-user');
+    const errBox = document.getElementById('edit-user-error');
+    const btnSubmit = document.getElementById('btn-submit-edit-user');
+
+    errBox.classList.add('hidden');
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Menyimpan...';
+
+    const formData = new FormData(form);
+
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') {
+        errBox.textContent = data.message || 'Terjadi kesalahan.';
+        errBox.classList.remove('hidden');
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = 'Perbarui Profil';
+        return;
+      }
+
+      window.location.reload();
+    } catch (err) {
+      errBox.textContent = 'Gagal menghubungi server.';
+      errBox.classList.remove('hidden');
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = 'Perbarui Profil';
+    }
+  };
+
+  // Submit AJAX untuk Reset Kata Sandi
+  window.submitResetPassword = async function(e) {
+    e.preventDefault();
+    const form = document.getElementById('form-reset-password');
+    const errBox = document.getElementById('reset-password-error');
+    const btnSubmit = document.getElementById('btn-submit-reset-password');
+
+    errBox.classList.add('hidden');
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Menyimpan...';
+
+    const formData = new FormData(form);
+
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') {
+        errBox.textContent = data.message || 'Terjadi kesalahan.';
+        errBox.classList.remove('hidden');
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = 'Simpan Kata Sandi';
+        return;
+      }
+
+      window.location.reload();
+    } catch (err) {
+      errBox.textContent = 'Gagal menghubungi server.';
+      errBox.classList.remove('hidden');
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = 'Simpan Kata Sandi';
+    }
+  };
+
+  window.openEditUserModal = function(id, username, name, email, phone, role) {
+    document.getElementById('form-edit-user').action = '/admin/users/' + id + '/edit';
+    document.getElementById('edit-username').value = username;
+    document.getElementById('edit-name').value = name;
+    document.getElementById('edit-email').value = email;
+    document.getElementById('edit-phone').value = phone;
+    document.getElementById('edit-role').value = role;
+    document.getElementById('edit-user-error').classList.add('hidden');
+    openModal('modal-edit-user');
+  };
+
+  window.openResetPasswordModal = function(id, username, name) {
+    document.getElementById('form-reset-password').action = '/admin/users/' + id + '/reset-password';
+    document.getElementById('reset-target-user').textContent = name + ' (@' + username + ')';
+    document.getElementById('reset-new-password').value = '';
+    document.getElementById('reset-confirm-password').value = '';
+    document.getElementById('reset-password-error').classList.add('hidden');
+    openModal('modal-reset-password');
+  };
+
+  window.openDeleteUserModal = function(id, username, name) {
+    document.getElementById('form-delete-user').action = '/admin/users/' + id + '/delete';
+    document.getElementById('delete-user-label').textContent = name + ' (@' + username + ')';
+    openModal('modal-delete-user');
+  };
+
+  // Filter client-side pencarian instan
+  window.filterUserList = function() {
+    const q = document.getElementById('user-search-input').value.toLowerCase().trim();
+    const rows = document.querySelectorAll('.user-row');
+    rows.forEach(r => {
+      const data = r.getAttribute('data-search') || '';
+      if (!q || data.includes(q)) {
+        r.style.display = '';
+      } else {
+        r.style.display = 'none';
+      }
+    });
+  };
+</script>
+{% endblock %}

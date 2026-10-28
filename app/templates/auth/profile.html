@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Profil Saya - TaskOps{% endblock %}
+{% block header_title %}Profil Saya{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+
+  <!-- Header Profil -->
+  <div class="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+    <div class="w-16 h-16 rounded-2xl bg-brand-100 text-brand-700 font-bold text-2xl flex items-center justify-center border border-brand-200 shrink-0">
+      {{ user.name[:1]|upper }}
+    </div>
+    <div class="space-y-1 flex-1">
+      <div class="flex items-center gap-2 flex-wrap">
+        <h1 class="text-xl sm:text-2xl font-bold text-slate-900">{{ user.name }}</h1>
+        {% if user.is_admin %}
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+          Administrator
+        </span>
+        {% else %}
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+          Staff Lapangan
+        </span>
+        {% endif %}
+      </div>
+      <p class="text-xs sm:text-sm text-slate-500">@{{ user.username }}</p>
+    </div>
+  </div>
+
+  <!-- Ringkasan Statistik Pekerjaan Pengguna -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm text-center">
+      <div class="text-xs font-medium text-slate-500">Total Tugas</div>
+      <div class="text-2xl font-bold text-slate-900 mt-1">{{ metrics.total }}</div>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm text-center">
+      <div class="text-xs font-medium text-emerald-600">Selesai</div>
+      <div class="text-2xl font-bold text-emerald-700 mt-1">{{ metrics.completed }}</div>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm text-center">
+      <div class="text-xs font-medium text-blue-600">Dikerjakan</div>
+      <div class="text-2xl font-bold text-blue-700 mt-1">{{ metrics.in_progress }}</div>
+    </div>
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm text-center">
+      <div class="text-xs font-medium text-amber-600">Tertunda</div>
+      <div class="text-2xl font-bold text-amber-700 mt-1">{{ metrics.pending }}</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <!-- Informasi Akun & Keanggotaan Tim -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+      <h2 class="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">Informasi Akun & Kontak</h2>
+      
+      <div class="space-y-3 text-sm">
+        <div>
+          <span class="text-xs font-semibold text-slate-400 uppercase block">Nama Lengkap</span>
+          <span class="font-medium text-slate-800">{{ user.name }}</span>
+        </div>
+        <div>
+          <span class="text-xs font-semibold text-slate-400 uppercase block">Username</span>
+          <span class="font-medium text-slate-800">@{{ user.username }}</span>
+        </div>
+        <div>
+          <span class="text-xs font-semibold text-slate-400 uppercase block">Nomor Telepon</span>
+          <span class="font-medium text-slate-800">{{ user.phone_number or '-' }}</span>
+        </div>
+        <div>
+          <span class="text-xs font-semibold text-slate-400 uppercase block">Alamat Email</span>
+          <span class="font-medium text-slate-800">{{ user.email or '-' }}</span>
+        </div>
+      </div>
+
+      <div class="pt-4 border-t border-slate-100">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Divisi / Tim Operasional Aktif</h3>
+        {% if user.active_teams %}
+        <div class="flex flex-wrap gap-1.5">
+          {% for t in user.active_teams %}
+          <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-brand-50 text-brand-700 border border-brand-200">
+            Tim {{ t.name }}
+          </span>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-xs text-slate-400 italic">Belum terdaftar pada divisi tim operasional.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Ubah Kata Sandi Mandiri -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
+      <h2 class="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">Keamanan & Ubah Kata Sandi</h2>
+
+      <form action="{{ url_for('auth.profile') }}"
+            hx-post="{{ url_for('auth.profile') }}"
+            hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML"
+            method="POST" class="space-y-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="change_password">
+
+        <div>
+          <label for="current_password" class="block text-xs font-semibold text-slate-700 uppercase mb-1">
+            Kata Sandi Saat Ini <span class="text-red-500">*</span>
+          </label>
+          <input type="password" id="current_password" name="current_password" required
+            class="block w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label for="new_password" class="block text-xs font-semibold text-slate-700 uppercase mb-1">
+            Kata Sandi Baru <span class="text-red-500">*</span>
+          </label>
+          <input type="password" id="new_password" name="new_password" required minlength="6"
+            placeholder="Minimal 6 karakter"
+            class="block w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label for="confirm_password" class="block text-xs font-semibold text-slate-700 uppercase mb-1">
+            Konfirmasi Kata Sandi Baru <span class="text-red-500">*</span>
+          </label>
+          <input type="password" id="confirm_password" name="confirm_password" required minlength="6"
+            class="block w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        </div>
+
+        <div class="pt-2 flex justify-end">
+          <button type="submit"
+            class="px-5 py-2.5 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-all active:scale-[0.99]">
+            Simpan Kata Sandi Baru
+          </button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
+

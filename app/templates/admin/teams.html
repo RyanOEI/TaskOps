@@ -1,0 +1,578 @@
+{% extends "base.html" %}
+
+{% block title %}Manajemen Tim - TaskOps{% endblock %}
+{% block header_title %}Manajemen Tim{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header & Tombol Buat Tim -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900">Manajemen Tim</h1>
+      <p class="text-sm text-slate-500 mt-0.5">Kelola divisi operasional dan penugasan anggota tim</p>
+    </div>
+    <div>
+      <button type="button" onclick="openModal('modal-create-team')"
+        class="inline-flex items-center justify-center w-full sm:w-auto px-4 py-2.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-all active:scale-[0.99]">
+        <svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+        Buat Tim Baru
+      </button>
+    </div>
+  </div>
+
+  <!-- Tab Filter Status & Bilah Pencarian Real-Time -->
+  <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between gap-4">
+    <!-- Tabs Filter -->
+    <div class="flex space-x-1 p-1 bg-slate-100 rounded-xl max-w-fit">
+      <a href="{{ url_for('admin.teams_list', tab='active') }}"
+        hx-get="{{ url_for('admin.teams_list', tab='active') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'active' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+        Aktif ({{ counts.active }})
+      </a>
+      <a href="{{ url_for('admin.teams_list', tab='inactive') }}"
+        hx-get="{{ url_for('admin.teams_list', tab='inactive') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'inactive' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+        Nonaktif ({{ counts.inactive }})
+      </a>
+      <a href="{{ url_for('admin.teams_list', tab='all') }}"
+        hx-get="{{ url_for('admin.teams_list', tab='all') }}" hx-target="#main-content" hx-select="#main-content" hx-swap="innerHTML show:top" hx-push-url="true"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors {% if current_tab == 'all' %}bg-white text-slate-900 shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+        Semua ({{ counts.all }})
+      </a>
+    </div>
+
+    <!-- Bilah Pencarian Real-Time -->
+    <div class="relative flex-1 max-w-sm">
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+      </div>
+      <input type="text" id="team-search-input" onkeyup="filterTeamList()"
+        placeholder="Cari nama tim atau deskripsi..."
+        class="w-full pl-9 pr-3 py-2 text-xs sm:text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors">
+    </div>
+  </div>
+
+  <!-- Grid Kartu Tim -->
+  {% if teams %}
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="teams-grid">
+    {% for team in teams %}
+    <div class="team-card bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+         data-search="{{ team.name|lower }} {{ (team.description or '')|lower }}">
+      
+      <!-- Bagian Atas Kartu -->
+      <div class="space-y-3">
+        <div class="flex items-start justify-between gap-3">
+          <div class="space-y-1">
+            <h3 class="text-base font-bold text-slate-900">{{ team.name }}</h3>
+            {% if team.description %}
+            <p class="text-xs text-slate-500 line-clamp-2">{{ team.description }}</p>
+            {% else %}
+            <p class="text-xs text-slate-400 italic">Tidak ada deskripsi</p>
+            {% endif %}
+          </div>
+          <div>
+            {% if team.is_active %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+              <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-emerald-500"></span>
+              Aktif
+            </span>
+            {% else %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+              <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-slate-400"></span>
+              Nonaktif
+            </span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Daftar Anggota Aktif Tim -->
+        <div class="pt-2 border-t border-slate-100">
+          <div class="flex items-center justify-between text-xs text-slate-500 mb-2">
+            <span class="font-semibold uppercase tracking-wider text-[11px] text-slate-400">Anggota Tim</span>
+            <span class="font-medium bg-slate-100 px-2 py-0.5 rounded-full">{{ team.active_members|length }} orang</span>
+          </div>
+
+          {% if team.active_members %}
+          <div class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+            {% for m in team.active_members %}
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-50 text-slate-700 border border-slate-200">
+              <span class="w-4 h-4 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-[10px]">
+                {{ m.name[:1]|upper }}
+              </span>
+              <span>{{ m.name }}</span>
+            </span>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="py-2.5 text-center text-xs text-slate-400 italic bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            Belum ada anggota (Tim Kosong)
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Tombol Aksi di Bawah Kartu -->
+      <div class="mt-5 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-end gap-2">
+        {% if not team.is_active %}
+        <form action="{{ url_for('admin.team_reactivate', team_id=team.id) }}" method="POST" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit"
+            class="px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors border border-emerald-200">
+            Aktifkan Kembali
+          </button>
+        </form>
+        {% endif %}
+
+        <!-- Tombol Kelola Anggota (Aksi Utama) -->
+        <button type="button"
+          data-id="{{ team.id }}"
+          data-name="{{ team.name }}"
+          onclick="openManageMembersModal(this.dataset.id, this.dataset.name)"
+          class="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded-xl transition-colors">
+          <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+          </svg>
+          Kelola Anggota
+        </button>
+
+        <!-- Tombol Edit Info -->
+        <button type="button"
+          data-id="{{ team.id }}"
+          data-name="{{ team.name }}"
+          data-description="{{ team.description or '' }}"
+          onclick="openEditTeamModal(this.dataset.id, this.dataset.name, this.dataset.description)"
+          class="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+          Edit Info
+        </button>
+
+        <!-- Tombol Hapus Cerdas -->
+        <button type="button"
+          data-id="{{ team.id }}"
+          data-name="{{ team.name }}"
+          onclick="openDeleteTeamModal(this.dataset.id, this.dataset.name)"
+          class="px-2.5 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors border border-red-200">
+          Hapus
+        </button>
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
+    <svg class="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0z"></path>
+    </svg>
+    <p class="text-sm font-medium text-slate-600">Tidak ada tim operasional pada tab ini</p>
+    <p class="text-xs text-slate-400 mt-1">Gunakan tombol "Buat Tim Baru" untuk membentuk tim kerja.</p>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: BUAT TIM BARU (HANYA INFORMASI TIM) -->
+<!-- ========================================================================= -->
+<div id="modal-create-team" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+      <div>
+        <h3 class="text-lg font-bold text-slate-900">Buat Tim Baru</h3>
+        <p class="text-xs text-slate-500 mt-0.5">Penetapan anggota dilakukan setelah tim dibuat</p>
+      </div>
+      <button type="button" onclick="closeModal('modal-create-team')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+    </div>
+
+    <!-- Error Banner di dalam modal -->
+    <div id="create-team-error" class="hidden mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 font-medium"></div>
+
+    <form id="form-create-team" onsubmit="submitCreateTeam(event)" class="mt-4 space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase">Nama Tim <span class="text-red-500">*</span></label>
+        <input type="text" id="create-team-name" name="name" required minlength="3" placeholder="contoh: Tim Mekanikal & Plumbing"
+          class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+        <p class="text-[11px] text-slate-400 mt-0.5">Minimal 3 karakter.</p>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase">Deskripsi Tim</label>
+        <textarea name="description" rows="3" placeholder="Jelaskan ruang lingkup tugas atau divisi tim ini..."
+          class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"></textarea>
+      </div>
+
+      <div class="pt-3 flex justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-create-team')"
+          class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+          Batal
+        </button>
+        <button type="submit" id="btn-submit-create-team"
+          class="px-4 py-2 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-colors">
+          Buat Tim
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: EDIT INFO TIM (HANYA INFORMASI TIM) -->
+<!-- ========================================================================= -->
+<div id="modal-edit-team" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+      <h3 class="text-lg font-bold text-slate-900">Edit Info Tim</h3>
+      <button type="button" onclick="closeModal('modal-edit-team')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+    </div>
+
+    <!-- Error Banner di dalam modal edit tim -->
+    <div id="edit-team-error" class="hidden mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 font-medium"></div>
+
+    <form id="form-edit-team" onsubmit="submitEditTeam(event)" method="POST" class="mt-4 space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase">Nama Tim <span class="text-red-500">*</span></label>
+        <input type="text" id="edit-team-name" name="name" required minlength="3"
+          class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none">
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase">Deskripsi Tim</label>
+        <textarea id="edit-team-description" name="description" rows="3"
+          class="mt-1 block w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"></textarea>
+      </div>
+
+      <div class="pt-3 flex justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-edit-team')"
+          class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+          Batal
+        </button>
+        <button type="submit" id="btn-submit-edit-team"
+          class="px-4 py-2 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-colors">
+          Perbarui Info Tim
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: KELOLA ANGGOTA TIM (CHIP LIST DENGAN TOMBOL X & DROPDOWN CARI) -->
+<!-- ========================================================================= -->
+<div id="modal-manage-members" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+      <div>
+        <h3 class="text-lg font-bold text-slate-900">Kelola Anggota Tim</h3>
+        <p class="text-xs text-brand-600 font-semibold mt-0.5" id="manage-team-title">Tim: ...</p>
+      </div>
+      <button type="button" onclick="closeModal('modal-manage-members')" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+    </div>
+
+    <form id="form-manage-members" method="POST" class="mt-4 space-y-5">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <!-- Container Hidden Inputs member_ids -->
+      <div id="hidden-member-inputs"></div>
+
+      <!-- Bagian 1: Daftar Chip Anggota Saat Ini -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-xs font-semibold text-slate-700 uppercase">Anggota Terpilih</label>
+          <span class="text-xs text-slate-400" id="chip-member-count">0 anggota</span>
+        </div>
+
+        <div id="chips-container" class="min-h-[72px] p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap gap-2 items-center">
+          <!-- Chips dirender di sini via JS -->
+        </div>
+      </div>
+
+      <!-- Bagian 2: Tambah Anggota dari Dropdown Pengguna Aktif -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Tambah Anggota Baru</label>
+        <div class="flex gap-2">
+          <select id="select-available-user" class="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none">
+            <option value="">-- Pilih Pengguna Aktif --</option>
+          </select>
+          <button type="button" onclick="addMemberFromSelect()"
+            class="px-4 py-2 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-colors shrink-0">
+            + Tambah
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-1">Pilih pengguna aktif dari daftar lalu klik '+ Tambah' untuk memasukkan ke chip di atas.</p>
+      </div>
+
+      <!-- Tombol Simpan Anggota -->
+      <div class="pt-3 flex justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-manage-members')"
+          class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+          Batal
+        </button>
+        <button type="submit"
+          class="px-4 py-2 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-colors">
+          Simpan Anggota
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: KONFIRMASI PENGHAPUSAN TIM (SMART DELETION) -->
+<!-- ========================================================================= -->
+<div id="modal-delete-team" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex items-center gap-3 pb-3 border-b border-slate-100">
+      <div class="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-slate-900">Konfirmasi Penghapusan Tim</h3>
+        <p class="text-xs text-slate-500 mt-0.5" id="delete-team-label">Nama Tim</p>
+      </div>
+    </div>
+
+    <div class="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 space-y-1">
+      <p class="font-semibold">Informasi Sistem:</p>
+      <p>Jika tim ini memiliki riwayat tugas terkait, sistem akan <strong>menonaktifkannya (mengarsipkan)</strong> demi menjaga integritas data.</p>
+      <p>Jika tim ini belum pernah memiliki tugas terkait, data tim akan <strong>dihapus secara permanen</strong> tanpa menghapus akun penggunanya.</p>
+    </div>
+
+    <form id="form-delete-team" method="POST" class="mt-5 flex justify-end gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="button" onclick="closeModal('modal-delete-team')"
+        class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+        Batal
+      </button>
+      <button type="submit"
+        class="px-4 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-sm transition-colors">
+        Lanjutkan Hapus
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Submit AJAX untuk Buat Tim (Anti-Reset)
+  window.submitCreateTeam = async function(e) {
+    e.preventDefault();
+    const form = document.getElementById('form-create-team');
+    const errBox = document.getElementById('create-team-error');
+    const btnSubmit = document.getElementById('btn-submit-create-team');
+
+    errBox.classList.add('hidden');
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Menyimpan...';
+
+    const formData = new FormData(form);
+
+    try {
+      const res = await fetch('{{ url_for("admin.team_create") }}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') {
+        errBox.textContent = data.message || 'Terjadi kesalahan.';
+        errBox.classList.remove('hidden');
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = 'Buat Tim';
+        return;
+      }
+
+      window.location.reload();
+    } catch (err) {
+      errBox.textContent = 'Gagal menghubungi server.';
+      errBox.classList.remove('hidden');
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = 'Buat Tim';
+    }
+  };
+
+  // Submit AJAX untuk Edit Info Tim
+  window.submitEditTeam = async function(e) {
+    e.preventDefault();
+    const form = document.getElementById('form-edit-team');
+    const errBox = document.getElementById('edit-team-error');
+    const btnSubmit = document.getElementById('btn-submit-edit-team');
+
+    errBox.classList.add('hidden');
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Menyimpan...';
+
+    const formData = new FormData(form);
+
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') {
+        errBox.textContent = data.message || 'Terjadi kesalahan.';
+        errBox.classList.remove('hidden');
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = 'Perbarui Info Tim';
+        return;
+      }
+
+      window.location.reload();
+    } catch (err) {
+      errBox.textContent = 'Gagal menghubungi server.';
+      errBox.classList.remove('hidden');
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = 'Perbarui Info Tim';
+    }
+  };
+
+  window.openEditTeamModal = function(id, name, description) {
+    document.getElementById('form-edit-team').action = '/admin/teams/' + id + '/edit';
+    document.getElementById('edit-team-name').value = name;
+    document.getElementById('edit-team-description').value = description;
+    document.getElementById('edit-team-error').classList.add('hidden');
+    openModal('modal-edit-team');
+  };
+
+  // =========================================================================
+  // LOGIKA CHIP UNTUK KELOLA ANGGOTA TIM
+  // =========================================================================
+  window.currentMembers = [];
+  window.availableUsers = [];
+
+  window.openManageMembersModal = async function(teamId, teamName) {
+    document.getElementById('form-manage-members').action = '/admin/teams/' + teamId + '/members';
+    document.getElementById('manage-team-title').textContent = 'Tim: ' + teamName;
+    document.getElementById('chips-container').innerHTML = '<span class="text-xs text-slate-400 italic">Memuat data anggota...</span>';
+
+    openModal('modal-manage-members');
+
+    try {
+      const res = await fetch('/admin/teams/' + teamId + '/members-data');
+      const data = await res.json();
+      if (data.status === 'success') {
+        window.currentMembers = data.current_members;
+        window.availableUsers = data.available_users;
+        renderChipsAndSelect();
+      } else {
+        alert(data.message || 'Gagal memuat data anggota tim.');
+      }
+    } catch (e) {
+      alert('Gagal mengambil data dari server.');
+    }
+  };
+
+  window.renderChipsAndSelect = function() {
+    const container = document.getElementById('chips-container');
+    const hiddenInputs = document.getElementById('hidden-member-inputs');
+    const select = document.getElementById('select-available-user');
+    const counter = document.getElementById('chip-member-count');
+
+    // Update Counter
+    counter.textContent = window.currentMembers.length + ' anggota';
+
+    // Render Chips & Hidden Inputs
+    container.innerHTML = '';
+    hiddenInputs.innerHTML = '';
+
+    if (window.currentMembers.length === 0) {
+      container.innerHTML = '<span class="text-xs text-slate-400 italic">Belum ada anggota yang dipilih (Tim Kosong).</span>';
+    } else {
+      window.currentMembers.forEach(m => {
+        // Hidden input
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'member_ids';
+        input.value = m.id;
+        hiddenInputs.appendChild(input);
+
+        // Chip Element
+        const chip = document.createElement('div');
+        chip.className = 'inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full text-xs font-medium bg-brand-50 text-brand-800 border border-brand-200 shadow-sm';
+        chip.innerHTML = `
+          <span class="w-4 h-4 rounded-full bg-brand-200 text-brand-900 font-bold flex items-center justify-center text-[10px]">
+            ${m.name.charAt(0).toUpperCase()}
+          </span>
+          <span class="truncate max-w-[150px]">${m.name}</span>
+          <span class="text-[10px] text-brand-500 font-normal">(@${m.username})</span>
+          <button type="button" onclick="removeMember(${m.id})" class="ml-1 w-4 h-4 rounded-full hover:bg-brand-200 flex items-center justify-center text-brand-600 hover:text-brand-900 transition-colors" title="Cabut Anggota">
+            &times;
+          </button>
+        `;
+        container.appendChild(chip);
+      });
+    }
+
+    // Render Dropdown Pilihan Pengguna yang Tersedia
+    select.innerHTML = '<option value="">-- Pilih Pengguna Aktif --</option>';
+    window.availableUsers.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = `${u.name} (@${u.username}) - ${u.role}`;
+      select.appendChild(opt);
+    });
+  };
+
+  window.removeMember = function(userId) {
+    const idx = window.currentMembers.findIndex(m => m.id === userId);
+    if (idx !== -1) {
+      const removed = window.currentMembers.splice(idx, 1)[0];
+      window.availableUsers.push(removed);
+      window.availableUsers.sort((a, b) => a.name.localeCompare(b.name));
+      renderChipsAndSelect();
+    }
+  };
+
+  window.addMemberFromSelect = function() {
+    const select = document.getElementById('select-available-user');
+    const selectedId = parseInt(select.value);
+    if (!selectedId) return;
+
+    const idx = window.availableUsers.findIndex(u => u.id === selectedId);
+    if (idx !== -1) {
+      const added = window.availableUsers.splice(idx, 1)[0];
+      window.currentMembers.push(added);
+      window.currentMembers.sort((a, b) => a.name.localeCompare(b.name));
+      renderChipsAndSelect();
+    }
+  };
+
+  window.openDeleteTeamModal = function(id, name) {
+    document.getElementById('form-delete-team').action = '/admin/teams/' + id + '/delete';
+    document.getElementById('delete-team-label').textContent = 'Tim: ' + name;
+    openModal('modal-delete-team');
+  };
+
+  // Filter client-side pencarian instan tim
+  window.filterTeamList = function() {
+    const q = document.getElementById('team-search-input').value.toLowerCase().trim();
+    const cards = document.querySelectorAll('.team-card');
+    cards.forEach(c => {
+      const data = c.getAttribute('data-search') || '';
+      if (!q || data.includes(q)) {
+        c.style.display = '';
+      } else {
+        c.style.display = 'none';
+      }
+    });
+  };
+</script>
+{% endblock %}
