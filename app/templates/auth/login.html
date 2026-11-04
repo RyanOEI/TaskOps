@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Masuk - TaskOps{% endblock %}
+
+{% block content %}
+<div class="min-h-[80vh] flex flex-col justify-center items-center py-6 sm:px-6 lg:px-8">
+  <div class="sm:mx-auto sm:w-full sm:max-w-md">
+    <!-- Logo & Branding Aplikasi -->
+    <div class="flex justify-center">
+      <img src="{{ url_for('static', filename='icons/icon.svg') }}" alt="TaskOps Logo" class="w-16 h-16 rounded-2xl shadow-md">
+    </div>
+    <h2 class="mt-4 text-center text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+      Selamat Datang di TaskOps
+    </h2>
+    <p class="mt-1 text-center text-sm text-slate-500">
+      Sistem Manajemen Tugas & Pengajuan Material
+    </p>
+  </div>
+
+  <div class="mt-6 sm:mx-auto sm:w-full sm:max-w-md w-full">
+    <div class="bg-white py-8 px-5 sm:px-10 shadow-sm border border-slate-200 rounded-2xl">
+      <form class="space-y-5" action="{{ url_for('auth.login', next=request.args.get('next')) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <!-- Input Pengenal (Username, No Telepon, atau Email) -->
+        <div>
+          <label for="identifier" class="block text-sm font-medium text-slate-700">
+            Username / No. Telepon / Email
+          </label>
+          <div class="mt-1 relative rounded-lg shadow-sm">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+              </svg>
+            </div>
+            <input id="identifier" name="identifier" type="text" autocomplete="username" required
+              placeholder="contoh: admin atau +6281234567890"
+              class="block w-full pl-10 pr-3 py-2.5 sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors">
+          </div>
+          <p class="mt-1 text-xs text-slate-400">Gunakan username, nomor HP E.164 (+62...), atau email Anda.</p>
+        </div>
+
+        <!-- Input Kata Sandi -->
+        <div>
+          <label for="password" class="block text-sm font-medium text-slate-700">
+            Kata Sandi
+          </label>
+          <div class="mt-1 relative rounded-lg shadow-sm">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+              </svg>
+            </div>
+            <input id="password" name="password" type="password" autocomplete="current-password" required
+              placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
+              class="block w-full pl-10 pr-3 py-2.5 sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-colors">
+          </div>
+        </div>
+
+        <!-- Centang Ingat Saya -->
+        <div class="flex items-center justify-between">
+          <div class="flex items-center">
+            <input id="remember" name="remember" type="checkbox" checked
+              class="h-4 w-4 text-brand-600 focus:ring-brand-500 border-slate-300 rounded">
+            <label for="remember" class="ml-2 block text-sm text-slate-700">
+              Ingat saya di perangkat ini (30 hari)
+            </label>
+          </div>
+        </div>
+
+        <!-- Tombol Masuk (Touch target >= 48px) -->
+        <div>
+          <button type="submit"
+            class="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-all active:scale-[0.99]">
+            Masuk ke TaskOps
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Informasi PWA Install -->
+    <div class="mt-6 text-center text-xs text-slate-400">
+      <p>Pasang TaskOps ke layar utama HP untuk akses cepat dan notifikasi waktu-nyata.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
