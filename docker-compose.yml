@@ -5,8 +5,6 @@
 # untuk basis data SQLite dan kunci VAPID Web Push.
 # ==============================================================================
 
-version: '3.8'
-
 services:
   web:
     build:
